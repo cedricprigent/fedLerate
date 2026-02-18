@@ -1,0 +1,151 @@
+import torch
+from torch import nn
+import torch.nn.functional as F
+
+from torchvision.models import resnet18, ResNet18_Weights
+
+
+class LeNet5(nn.Module):
+
+    def __init__(self, input_h=28, in_channels=1, num_classes=10):
+        super(LeNet5, self).__init__()
+        
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+
+        self.features = LeNet5_Features(input_h=input_h, in_channels=in_channels)
+        self.classifier = LeNet5_Classifier(features_output_size=self.features.features_output_size, in_channels=in_channels, num_classes=num_classes)
+
+    def forward(self, x):
+        x = self.features(x)
+        probas = self.classifier(x)
+        return probas
+
+
+class PFL_LeNet5(nn.Module):
+
+    def __init__(self, input_h=28, in_channels=1, num_classes=10):
+        super(PFL_LeNet5, self).__init__()
+
+        self.global_layers = LeNet5_Features(input_h=input_h, in_channels=in_channels)
+        self.local_layers = LeNet5_Classifier(features_output_size=self.global_layers.features_output_size, in_channels=in_channels, num_classes=num_classes)
+
+    def forward(self, x):
+        x = self.global_layers(x)
+        probas = self.local_layers(x)
+        return probas
+
+
+class LeNet5_Features(nn.Module):
+
+    def __init__(self, input_h=28, in_channels=1):
+        super(LeNet5_Features, self).__init__()
+        
+        # conv_maxpool_output = (input_h - kernel_size + 1) / 2 
+        features_output_h = int((((input_h - 4)/2) - 4)/2)
+        features_output_size = features_output_h * features_output_h
+
+        self.in_channels = in_channels
+        self.features_output_size = features_output_size
+
+        self.features = nn.Sequential(
+            
+            nn.Conv2d(in_channels, 16*in_channels, kernel_size=5),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(16*in_channels, 32*in_channels, kernel_size=5),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        return x
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.load_state_dict(state_dict, strict=True)
+
+
+class LeNet5_Classifier(nn.Module):
+
+    def __init__(self, features_output_size, in_channels=1, num_classes=10):
+        super(LeNet5_Classifier, self).__init__()
+
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+
+        self.classifier = nn.Sequential(
+            nn.Linear(features_output_size*32*in_channels, 120*in_channels),
+            nn.Tanh(),
+            nn.Linear(120*in_channels, 84*in_channels),
+            nn.Tanh(),
+            nn.Linear(84*in_channels, num_classes),
+        )
+
+    def forward(self, x):
+        logits = self.classifier(x)
+        probas = F.softmax(logits, dim=1)
+        return probas
+
+    def set_weights(self, weights):
+        """Set model weights from a list of NumPy ndarrays."""
+        state_dict = OrderedDict(
+            {k: torch.tensor(v) for k, v in zip(self.state_dict().keys(), weights)}
+        )
+        self.load_state_dict(state_dict, strict=True)
+
+
+class DummyModel(nn.Module):
+    def __init__(self, input_size=1, num_classes=1):
+        super(DummyModel, self).__init__()
+        self.fc = nn.Linear(input_size, num_classes)
+
+    def forward(self, x):
+        x = torch.flatten(x, 1)
+        logits = self.fc(x)
+        probas = F.softmax(logits, dim=1)
+        return probas
+
+
+def load_model(model_name, device):
+
+    if model_name == 'DummyModel':
+        model = DummyModel().to(device)
+    elif model_name == 'LeNet5':
+        model = LeNet5().to(device)
+    elif model_name == 'LeNet5_Features':
+        model = LeNet5_Features().to(device)
+    elif model_name == 'LeNet5_Classifier':
+        model = LeNet5_Classifier().to(device)
+    elif model_name == 'PFL_LeNet5':
+        model = PFL_LeNet5().to(device)
+    elif model_name == 'ResNet18':
+        model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).to(device)
+        model.fc = torch.nn.Linear(model.fc.in_features, 7).to(device)
+
+    else:
+        raise NotImplementedError
+
+    return model
+
+
+def get_global_layers(state_dict, n_local_layers):
+    n_layers = len(state_dict)
+    return {
+        k: v
+        for i, (k, v) in enumerate(state_dict.items())
+        if n_layers - i > n_local_layers * 2
+    }
+
+def get_local_layers(state_dict, n_local_layers):
+    n_layers = len(state_dict)
+    return {
+        k: v
+        for i, (k, v) in enumerate(state_dict.items())
+        if n_layers - i <= n_local_layers * 2
+    }

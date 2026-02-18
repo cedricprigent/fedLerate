@@ -1,0 +1,11 @@
+defaults:
+- scenario: mnist
+
+strategy:
+  FedProx
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/mnist/fedprox/${now:%Y-%m-%d}-${now:%H-%M-%S}

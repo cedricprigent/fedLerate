@@ -1,0 +1,8 @@
+model: PFL_LeNet5
+dataset: mnist
+n_rounds: 20
+n_clients: 100
+n_clients_per_round: 50
+local_epochs: 3
+batch_size: 64
+local_lr: 3e-3

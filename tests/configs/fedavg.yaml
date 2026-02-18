@@ -1,0 +1,11 @@
+defaults:
+- scenario: mnist
+
+strategy:
+  FedAvg
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/mnist/fedavg/${now:%Y-%m-%d}-${now:%H-%M-%S}
