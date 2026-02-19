@@ -107,6 +107,48 @@ def proximal_term(model, global_model, mu):
     return (mu / 2) * proximal_term
 
 
+def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, lambda_=0.5, device=DEVICE):
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(personalized_model.parameters(), lr=lr)
+
+    personalized_model.train()
+
+    for epoch in range(epochs):
+        train_loss = 0
+        train_accuracy = 0
+
+        for batch, (x, y) in enumerate(dataloader):
+            x = x.to(device)
+            if len(x.shape) == 3:
+                x = x.unsqueeze(1)  # Add channel dimension for MNIST
+            y = y.to(device)
+
+            # Forward pass
+            output = personalized_model(x)
+
+            # Calculate loss
+            prox = 0
+            for param, global_param in zip(personalized_model.parameters(), global_model.parameters()):
+                prox += (param - global_param).norm(2)
+            loss = criterion(output, y) + lambda_ * prox
+            train_loss += loss.item()
+            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+
+            # Zero grad
+            optimizer.zero_grad()
+
+            # Backprog
+            loss.backward()
+
+            # Optimize
+            optimizer.step()
+
+    train_loss = train_loss / len(dataloader)
+    train_accuracy = train_accuracy / len(dataloader)
+
+    return train_loss, train_accuracy
+
+
 def evaluate(model, dataloader, device=DEVICE):
     model.eval()
     correct = 0

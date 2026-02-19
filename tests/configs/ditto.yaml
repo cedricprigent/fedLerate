@@ -1,0 +1,13 @@
+defaults:
+- scenario: mnist
+
+strategy:
+  Ditto
+
+ditto_lambda: 0.5
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/mnist/ditto/${now:%Y-%m-%d}-${now:%H-%M-%S}
