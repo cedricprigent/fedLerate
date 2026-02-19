@@ -1,0 +1,13 @@
+defaults:
+- scenario: mnist
+
+strategy:
+  IFCA
+
+n_clusters: 4
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/mnist/ifca/${now:%Y-%m-%d}-${now:%H-%M-%S}
