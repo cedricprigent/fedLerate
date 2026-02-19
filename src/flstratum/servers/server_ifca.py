@@ -1,24 +1,15 @@
-from flstratum.servers.server_fedavg import FedAvgServer
-# from flstratum.clients.client_ifca import IFCAClient
+from flstratum.servers.server_cfl import CFLServer
 from flstratum.clients.client_base import BaseClient
 from flstratum.models.models import load_model
 import numpy as np
 
 
-class IFCAServer(FedAvgServer):
+class IFCAServer(CFLServer):
     def __init__(self, config):
         super(IFCAServer, self).__init__(config)
 
     def init_clients(self):
-        # Initialize clients based on the configuration
         self.clients = [BaseClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
-
-    def init_model(self) -> None:
-        self.models = [load_model(self.config['model_name'], device='cpu') for _ in range(self.config['n_clusters'])]
-
-    def broadcast_model(self, clients, model):
-        for client in clients:
-            client.set_model_weights(model.state_dict())
 
     def assign_clusters(self, selected_clients):
         cluster_assignments = [[] for _ in range(self.config['n_clusters'])]
@@ -32,13 +23,6 @@ class IFCAServer(FedAvgServer):
             cluster_assignments[best_cluster].append(client.client_id)
 
         return cluster_assignments
-
-    def aggregate(self, client_updates, cluster_id):
-        total_data_size = sum(update['data_size'] for update in client_updates)
-        cum_weights = {}
-        for key in self.models[cluster_id].state_dict().keys():
-            cum_weights[key] = sum(update['weights'][key] * update['data_size'] for update in client_updates) / total_data_size
-        self.models[cluster_id].load_state_dict(cum_weights)
 
     def train(self):
         # Main training loop
