@@ -1,6 +1,6 @@
-from flstratum.clients.client_base import BaseClient
-from flstratum.models.functions import train, evaluate, train_ditto
-from flstratum.models.models import load_model
+from fedlerate.clients.client_base import BaseClient
+from fedlerate.models.functions import train, evaluate, train_ditto
+from fedlerate.models.models import load_model
 
 
 class DittoClient(BaseClient):

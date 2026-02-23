@@ -1,6 +1,6 @@
-from flstratum.servers.server_fedavg import FedAvgServer
-from flstratum.models.models import load_model
-from flstratum.clients.client_pfl import PFLClient 
+from fedlerate.servers.server_fedavg import FedAvgServer
+from fedlerate.models.models import load_model
+from fedlerate.clients.client_pfl import PFLClient 
 
 
 class FedPerServer(FedAvgServer):

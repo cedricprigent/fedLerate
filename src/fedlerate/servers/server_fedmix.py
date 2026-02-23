@@ -1,6 +1,6 @@
-from flstratum.servers.server_cfl import CFLServer
-from flstratum.clients.client_fedmix import FedMixClient
-from flstratum.models.models import load_model
+from fedlerate.servers.server_cfl import CFLServer
+from fedlerate.clients.client_fedmix import FedMixClient
+from fedlerate.models.models import load_model
 import numpy as np
 
 

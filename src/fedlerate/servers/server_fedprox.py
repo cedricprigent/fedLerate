@@ -1,6 +1,6 @@
-from flstratum.servers.server_fedavg import FedAvgServer
-from flstratum.models.functions import train_fedprox, evaluate
-from flstratum.clients.client_fedprox import FedProxClient
+from fedlerate.servers.server_fedavg import FedAvgServer
+from fedlerate.models.functions import train_fedprox, evaluate
+from fedlerate.clients.client_fedprox import FedProxClient
 
 
 class FedProxServer(FedAvgServer):

@@ -1,10 +1,10 @@
-from flstratum.servers.server_fedavg import FedAvgServer
-from flstratum.servers.server_fedprox import FedProxServer
-from flstratum.servers.server_fedper import FedPerServer
-from flstratum.servers.server_ditto import DittoServer
-from flstratum.servers.server_ifca import IFCAServer
-from flstratum.servers.server_fcfl import FCFLServer
-from flstratum.servers.server_fedmix import FedMixServer
+from fedlerate.servers.server_fedavg import FedAvgServer
+from fedlerate.servers.server_fedprox import FedProxServer
+from fedlerate.servers.server_fedper import FedPerServer
+from fedlerate.servers.server_ditto import DittoServer
+from fedlerate.servers.server_ifca import IFCAServer
+from fedlerate.servers.server_fcfl import FCFLServer
+from fedlerate.servers.server_fedmix import FedMixServer
 
 import hydra
 from pathlib import Path

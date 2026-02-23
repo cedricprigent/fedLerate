@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from flstratum.servers.server_abc import ServerABC
-from flstratum.models.models import load_model
+from fedlerate.servers.server_abc import ServerABC
+from fedlerate.models.models import load_model
 import numpy as np
 
 

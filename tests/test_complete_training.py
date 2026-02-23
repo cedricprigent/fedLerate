@@ -1,5 +1,5 @@
 import torch
-from flstratum.servers.server_fedavg import FedAvgServer
+from fedlerate.servers.server_fedavg import FedAvgServer
 
 
 def test_complete_training():

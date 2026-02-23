@@ -1,5 +1,5 @@
-from flstratum.clients.client_base import BaseClient
-from flstratum.models.functions import train_fedprox, evaluate
+from fedlerate.clients.client_base import BaseClient
+from fedlerate.models.functions import train_fedprox, evaluate
 
 
 class FedProxClient(BaseClient):

@@ -1,7 +1,7 @@
-from flstratum.clients.client_abc import ClientABC
-from flstratum.models.functions import train, evaluate
-from flstratum.models.models import load_model
-from flstratum.data.partition import load_partition
+from fedlerate.clients.client_abc import ClientABC
+from fedlerate.models.functions import train, evaluate
+from fedlerate.models.models import load_model
+from fedlerate.data.partition import load_partition
 
 
 class BaseClient(ClientABC):

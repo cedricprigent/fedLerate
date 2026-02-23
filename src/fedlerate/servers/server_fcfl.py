@@ -1,5 +1,5 @@
-from flstratum.servers.server_cfl import CFLServer
-from flstratum.clients.client_base import BaseClient
+from fedlerate.servers.server_cfl import CFLServer
+from fedlerate.clients.client_base import BaseClient
 
 
 class FCFLServer(CFLServer):

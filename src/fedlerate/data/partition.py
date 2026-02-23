@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets.folder import default_loader
 
-from flstratum.data.transforms import MinMaxScaler
+from fedlerate.data.transforms import MinMaxScaler
 
 
 def dirichlet_partitions(

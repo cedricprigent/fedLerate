@@ -1,5 +1,5 @@
-from flstratum.servers.server_fedavg import FedAvgServer
-from flstratum.clients.client_ditto import DittoClient
+from fedlerate.servers.server_fedavg import FedAvgServer
+from fedlerate.clients.client_ditto import DittoClient
 
 class DittoServer(FedAvgServer):
     def __init__(self, config):

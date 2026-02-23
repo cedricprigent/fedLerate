@@ -1,6 +1,6 @@
-from flstratum.servers.server_abc import ServerABC
-from flstratum.clients.client_base import BaseClient
-from flstratum.models.models import load_model
+from fedlerate.servers.server_abc import ServerABC
+from fedlerate.clients.client_base import BaseClient
+from fedlerate.models.models import load_model
 import numpy as np
 import logging
 

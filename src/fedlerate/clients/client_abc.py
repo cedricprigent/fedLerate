@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from flstratum.models.models import load_model
+from fedlerate.models.models import load_model
 
 class ClientABC(ABC):
     def __init__(self, client_id, config, device):

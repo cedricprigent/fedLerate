@@ -1,4 +1,4 @@
-from flstratum import FedAvgServer
+from fedlerate import FedAvgServer
 import pytest
 import torch
 
