@@ -149,6 +149,49 @@ def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, l
     return train_loss, train_accuracy
 
 
+def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
+    criterion = torch.nn.CrossEntropyLoss()
+    params = [weights]
+    for model in models:
+        params += list(model.parameters())
+    optimizer = torch.optim.Adam(params, lr=lr)
+    k = len(models)
+
+    for epoch in range(epochs):
+        train_loss = 0
+        train_accuracy = 0
+
+        for batch, (x, y) in enumerate(dataloader):
+            x = x.to(device)
+            if len(x.shape) == 3:
+                x = x.unsqueeze(1)  # Add channel dimension for MNIST
+            y = y.to(device)
+
+            # Forward pass
+            output = torch.stack([m(x) for m in models])
+            pred = (weights.softmax(0).view(k, 1, 1) * output)
+
+            # Calculate loss
+            loss = criterion(pred, y)
+            train_loss += loss.item()
+            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+
+            # Zero grad
+            optimizer.zero_grad()
+            
+            # Backprog
+            loss.backward()
+
+            # Optimize
+            optimizer.step()
+
+    train_loss = train_loss / len(dataloader)
+    train_accuracy = train_accuracy / len(dataloader)
+    
+    return train_loss, train_accuracy
+
+
+
 def evaluate(model, dataloader, device=DEVICE):
     model.eval()
     correct = 0
@@ -166,6 +209,34 @@ def evaluate(model, dataloader, device=DEVICE):
 
             # Compute score
             _, predicted = torch.max(output, 1)
+            total += y.size(0)
+            correct += (predicted == y).sum().item()
+
+    return correct / total
+
+
+def evaluate_fedmix(models, weights, dataloader, device=DEVICE):
+    for model in models:
+        model.eval()
+    for w in weights:
+        w.eval()
+
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for batch, (x, y) in enumerate(dataloader):
+            x = x.to(device)
+            if len(x.shape) == 3:
+                x = x.unsqueeze(1)  # Add channel dimension for MNIST
+            y = y.to(device)
+
+            # Forward pass
+            output = torch.stack([m(x) for x in models])
+            pred = (w.softmax(0).view(k, 1, 1) * output)
+
+            # Compute score
+            _, predicted = torch.max(pred, 1)
             total += y.size(0)
             correct += (predicted == y).sum().item()
 

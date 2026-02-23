@@ -4,6 +4,7 @@ from flstratum.servers.server_fedper import FedPerServer
 from flstratum.servers.server_ditto import DittoServer
 from flstratum.servers.server_ifca import IFCAServer
 from flstratum.servers.server_fcfl import FCFLServer
+from flstratum.servers.server_fedmix import FedMixServer
 
 import hydra
 from pathlib import Path
@@ -33,7 +34,7 @@ def app(config):
         strategy=strategy,
         local_lr=config.scenario.local_lr,
         ditto_lambda=config.ditto_lambda if strategy in ['Ditto'] else None,
-        n_clusters=config.n_clusters if strategy in ['IFCA', 'FCFL'] else None,
+        n_clusters=config.n_clusters if strategy in ['IFCA', 'FCFL', 'FedMix'] else None,
         labels=config.labels if strategy in ['FCFL'] else None
     )
 
@@ -55,6 +56,9 @@ def app(config):
         server.run()
     if strategy == 'FCFL':
         server = FCFLServer(d)
+        server.run()
+    if strategy == 'FedMix':
+        server = FedMixServer(d)
         server.run()
 
 if __name__ == '__main__':
