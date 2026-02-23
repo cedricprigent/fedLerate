@@ -168,11 +168,10 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
             y = y.to(device)
 
             # Forward pass
-            output = torch.stack([m(x) for m in models])
-            pred = (weights.softmax(0).view(k, 1, 1) * output)
+            output = torch.stack([w * m(x) for w, m in zip(weights, models)], dim=0).sum(dim=0)
 
             # Calculate loss
-            loss = criterion(pred, y)
+            loss = criterion(output, y)
             train_loss += loss.item()
             train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
 

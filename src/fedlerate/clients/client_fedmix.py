@@ -40,7 +40,8 @@ class FedMixClient(ClientABC):
 
     def init_model(self, k):
         # Initialize mixture of experts
-        self.weights = torch.nn.Parameter(torch.ones(k)).to(self.device) / k
+        self.weights = torch.nn.Parameter(torch.ones(k, device=self.device) / k)
+
         self.models = [
             load_model(self.config['model_name'], device=self.device) for _ in range(k)
         ]
@@ -61,6 +62,6 @@ class FedMixClient(ClientABC):
 
     def get_model_weights(self):
         if self.models is not None:
-            return [model[i].state_dict() for model in self.models]
+            return [model.state_dict() for model in self.models]
         else:
             return None
