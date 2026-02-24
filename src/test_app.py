@@ -4,6 +4,7 @@ from fedlerate.servers.server_fedper import FedPerServer
 from fedlerate.servers.server_ditto import DittoServer
 from fedlerate.servers.server_ifca import IFCAServer
 from fedlerate.servers.server_fcfl import FCFLServer
+from fedlerate.servers.server_fpercfl import FPerCFLServer
 from fedlerate.servers.server_fedmix import FedMixServer
 
 import hydra
@@ -33,6 +34,7 @@ def app(config):
         metrics_save_path=metrics_save_path,
         strategy=strategy,
         local_lr=config.scenario.local_lr,
+        fedprox_mu=config.fedprox_mu if strategy in ['FedProx'] else None,
         ditto_lambda=config.ditto_lambda if strategy in ['Ditto'] else None,
         n_clusters=config.n_clusters if strategy in ['IFCA', 'FCFL', 'FedMix'] else None,
         labels=config.labels if strategy in ['FCFL'] else None
@@ -56,6 +58,9 @@ def app(config):
         server.run()
     if strategy == 'FCFL':
         server = FCFLServer(d)
+        server.run()
+    if strategy == 'FPerCFL':
+        server = FPerCFLServer(d)
         server.run()
     if strategy == 'FedMix':
         server = FedMixServer(d)
