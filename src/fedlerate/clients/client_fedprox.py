@@ -14,8 +14,7 @@ class FedProxClient(BaseClient):
             epochs=self.config['local_epochs'], 
             device=self.device,
             mu=self.config['fedprox_mu'],
-            lr=self.config['local_lr'],
-            global_weights=self.global_weights
+            lr=self.config['local_lr']
         )
 
         return {
