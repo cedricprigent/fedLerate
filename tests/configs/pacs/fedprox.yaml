@@ -1,0 +1,13 @@
+defaults:
+- scenario: pacs
+
+strategy:
+  FedProx
+
+fedprox_mu: 0.01
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/pacs/fedprox/${now:%Y-%m-%d}-${now:%H-%M-%S}

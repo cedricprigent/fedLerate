@@ -1,0 +1,17 @@
+defaults:
+- scenario: pacs
+
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/pacs/fcfl/${now:%Y-%m-%d}-${now:%H-%M-%S}
+
+
+strategy: FCFL
+n_clusters: 4
+labels: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+         1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+         2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+         3, 3, 3, 3, 3, 3, 3, 3, 3, 3,]

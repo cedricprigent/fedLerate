@@ -4,6 +4,8 @@ defaults:
 strategy:
   FedProx
 
+fedprox_mu: 0.01
+
 hydra:
   job:
     chdir: True

@@ -1,0 +1,13 @@
+defaults:
+- scenario: pacs
+
+strategy:
+  IFCA
+
+n_clusters: 4
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/pacs/ifca/${now:%Y-%m-%d}-${now:%H-%M-%S}

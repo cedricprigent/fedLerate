@@ -1,0 +1,11 @@
+defaults:
+- scenario: pacs
+
+strategy:
+  FedPer
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/pacs/fedper/${now:%Y-%m-%d}-${now:%H-%M-%S}

@@ -1,0 +1,13 @@
+defaults:
+- scenario: pacs
+
+strategy:
+  FedMix
+
+n_clusters: 4
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/pacs/fedmix/${now:%Y-%m-%d}-${now:%H-%M-%S}
