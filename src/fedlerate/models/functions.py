@@ -168,7 +168,12 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
             y = y.to(device)
 
             # Forward pass
-            output = torch.stack([w * m(x) for w, m in zip(weights, models)], dim=0).sum(dim=0)
+            normalized_weights = torch.softmax(weights, dim=0)
+
+            model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+
+            output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
+
 
             # Calculate loss
             loss = criterion(output, y)
@@ -217,8 +222,6 @@ def evaluate(model, dataloader, device=DEVICE):
 def evaluate_fedmix(models, weights, dataloader, device=DEVICE):
     for model in models:
         model.eval()
-    for w in weights:
-        w.eval()
 
     correct = 0
     total = 0
@@ -231,11 +234,15 @@ def evaluate_fedmix(models, weights, dataloader, device=DEVICE):
             y = y.to(device)
 
             # Forward pass
-            output = torch.stack([m(x) for x in models])
-            pred = (w.softmax(0).view(k, 1, 1) * output)
+            normalized_weights = torch.softmax(weights, dim=0)
+
+            model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+
+            output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
+
 
             # Compute score
-            _, predicted = torch.max(pred, 1)
+            _, predicted = torch.max(output, 1)
             total += y.size(0)
             correct += (predicted == y).sum().item()
 

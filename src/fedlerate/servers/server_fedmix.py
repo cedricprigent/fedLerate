@@ -38,10 +38,8 @@ class FedMixServer(CFLServer):
 
             total_loss = sum(update['loss'] for update in updates)
 
-            # Evaluate cluster models
-            for cid, cluster in enumerate(cluster_assignments):
-                self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
-
+            # Evaluate
+            self.broadcast_model(selected_clients, self.models)
             accs = self.evaluate()
 
             metrics = {
