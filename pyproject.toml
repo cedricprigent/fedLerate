@@ -16,3 +16,6 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/cedricprigent/fedlerate"
+
+[project.scripts]
+fedlerate = "fedlerate.cli:main"
