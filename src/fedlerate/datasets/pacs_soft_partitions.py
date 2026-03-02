@@ -5,7 +5,7 @@ import argparse
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, ConcatDataset, random_split
 import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets.folder import default_loader
@@ -67,7 +67,17 @@ def dirichlet_partitions(
     return datasets
 
 
-if __name__ == '__main__':
+def split_dataset(dataset, split_ratio=[0.8, 0.05, 0.05, 0.05]):
+    total_size = len(dataset)
+
+    sizes = [int(r * total_size) for r in ratios]
+    sizes[-1] = total_size - sum(sizes[:-1])
+    
+    return random_split(dataset, sizes)
+
+
+
+def generate_pacs_soft_partitions():
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
 
@@ -94,7 +104,19 @@ if __name__ == '__main__':
     # dataloaders
     transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True)])
     datasets = [ImageFolder(p, transform=transform) for p in paths]
-    dataloaders = [DataLoader(ds, batch_size=32, shuffle=True) for ds in datasets]
+    split_ratio = [
+        [0.85, 0.05, 0.05, 0.05],
+        [0.05, 0.85, 0.05, 0.05],
+        [0.05, 0.05, 0.85, 0.05],
+        [0.05, 0.05, 0.05, 0.85],
+    ]
+    splits = [
+        split_dataset(dataset, split_ratio=split_ratio[i]) for i, dataset in enumerate(datasets)
+    ]
+    combined_datasets = [
+        ConcatDataset([splits[i][j] for i in range(4)]) for j in range(4)
+    ]
+    dataloaders = [DataLoader(ds, batch_size=32, shuffle=True) for ds in combined_datasets]
 
     print("#################################################")
     print("# Generating partitions for PACS dataset\t#")
