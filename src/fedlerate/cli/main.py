@@ -46,7 +46,7 @@ def main():
         generate_mnist_partitions()
     if args.dataset == "PACS-soft":
         generate_pacs_soft_partitions()
-    if args.dataset == "PACS-strct":
+    if args.dataset == "PACS-strict":
         generate_pacs_strict_partitions()
 
 if __name__ == "__main__":
