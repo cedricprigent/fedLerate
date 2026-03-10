@@ -34,7 +34,15 @@ class IFCAServer(CFLServer):
             selected_clients = self.select_clients()
 
             # Assign clients to clusters
-            cluster_assignments = self.assign_clusters(selected_clients)
+            if rnd == 0:
+                # Random assignment
+                cids = np.arange(0, len(self.clients))
+                shuffle = np.random.shuffle(cids)
+                clusters = np.array_split(cids, self.config['n_clusters'])
+                cluster_assignments = [c.tolist() for c in clusters]
+            else:
+                # ERM assignment
+                cluster_assignments = self.assign_clusters(selected_clients)
 
             # Train each cluster model with its assigned clients
             total_loss = 0

@@ -4,12 +4,15 @@ from fedlerate.servers.server_fedper import FedPerServer
 from fedlerate.servers.server_ditto import DittoServer
 from fedlerate.servers.server_ifca import IFCAServer
 from fedlerate.servers.server_fcfl import FCFLServer
-from fedlerate.servers.server_fpercfl import FPerCFLServer
+from fedlerate.servers.server_per_ifca import PerIFCAServer
+from fedlerate.servers.server_per_fcfl import PerFCFLServer
 from fedlerate.servers.server_fedmix import FedMixServer
 
 import hydra
 from pathlib import Path
 import numpy as np
+
+from omegaconf import OmegaConf
 
 # python app.py --config-path conf --config_name config
 @hydra.main(config_path='config', config_name='config', version_base=None)
@@ -23,6 +26,13 @@ def app(config):
     strategy = config.strategy
     dataset = config.scenario.dataset
 
+    OmegaConf.set_struct(config, False)
+    
+    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "labels"]
+    for k in strategy_keys:
+        if k not in config:
+            config[k] = None
+
     # Base parameters
     d = dict(
         n_rounds=config.scenario.n_rounds,
@@ -34,10 +44,10 @@ def app(config):
         metrics_save_path=metrics_save_path,
         strategy=strategy,
         local_lr=config.scenario.local_lr,
-        fedprox_mu=config.fedprox_mu if strategy in ['FedProx'] else None,
-        ditto_lambda=config.ditto_lambda if strategy in ['Ditto'] else None,
-        n_clusters=config.n_clusters if strategy in ['IFCA', 'FCFL', 'FedMix'] else None,
-        labels=config.labels if strategy in ['FCFL'] else None
+        fedprox_mu=config.fedprox_mu,
+        ditto_lambda=config.ditto_lambda,
+        n_clusters=config.n_clusters,
+        labels=config.labels
     )
 
     # Run experiment
@@ -56,11 +66,14 @@ def app(config):
     if strategy == 'IFCA':
         server = IFCAServer(d)
         server.run()
+    if strategy == 'PerIFCA':
+        server = PerIFCAServer(d)
+        server.run()
     if strategy == 'FCFL':
         server = FCFLServer(d)
         server.run()
-    if strategy == 'FPerCFL':
-        server = FPerCFLServer(d)
+    if strategy == 'PerFCFL':
+        server = PerFCFLServer(d)
         server.run()
     if strategy == 'FedMix':
         server = FedMixServer(d)
