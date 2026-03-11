@@ -112,6 +112,33 @@ class DummyModel(nn.Module):
         return probas
 
 
+class PFL_ResNet18(nn.Module):
+    def __init__(self):
+        super().__init__()
+        model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+
+        self.global_layers = nn.Sequential(
+            model.conv1,
+            model.bn1,
+            model.relu,
+            model.maxpool,
+            model.layer1,
+            model.layer2,
+            model.layer3
+        )
+        self.local_layers = nn.Sequential(
+            model.layer4,
+            model.avgpool,
+            nn.Flatten(),
+            torch.nn.Linear(model.fc.in_features, 7)
+        )
+
+    def forward(self, x):
+        x = self.global_layers(x)
+        x = self.local_layers(x)
+        return x
+
+
 def load_model(model_name, device):
 
     if model_name == 'DummyModel':
@@ -127,7 +154,8 @@ def load_model(model_name, device):
     elif model_name == 'ResNet18':
         model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).to(device)
         model.fc = torch.nn.Linear(model.fc.in_features, 7).to(device)
-
+    elif model_name == 'PFL_ResNet18':
+        model = PFL_ResNet18().to(device)
     else:
         raise NotImplementedError
 
