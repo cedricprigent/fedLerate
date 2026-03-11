@@ -1,8 +1,8 @@
-model: ResNet18
+model: PFL_ResNet18
 dataset: pacs
 n_rounds: 20
 n_clients: 40
-n_clients_per_round: 20
+n_clients_per_round: 40
 local_epochs: 1
 batch_size: 64
 local_lr: 3e-3
