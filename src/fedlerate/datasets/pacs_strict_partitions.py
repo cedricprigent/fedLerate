@@ -1,7 +1,6 @@
 import os
 
 from typing import Dict, List, Tuple
-import argparse
 
 import numpy as np
 import torch
@@ -67,21 +66,9 @@ def dirichlet_partitions(
     return datasets
 
 
-def generate_pacs_strict_partitions():
+def generate_pacs_strict_partitions(n_partitions=10, alpha=10):
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
-
-    # parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--n_partitions", type=int, required=False, default=10, help="number of partitions per domain"
-    )
-    parser.add_argument(
-        "--alpha", type=float, required=False, default=10
-    )
-    args = parser.parse_args()
-    alpha = args.alpha
-    n_partitions = args.n_partitions
 
     # dataset path
     base_path = '/tmp/app/data/pacs_data/'
