@@ -24,7 +24,22 @@ def build_parser():
     partition_parser.add_argument(
         "-d", "--dataset",
         required=True,
+        type=str,
         help="Dataset name"
+    )
+
+    partition_parser.add_argument(
+        "-a", "--alpha",
+        required=True,
+        type=float,
+        help="Concentration parameter"
+    )
+
+    partition_parser.add_argument(
+        "-c", "--clients",
+        required=True,
+        type=int,
+        help="Number of clients/partitions"
     )
 
     return parser
@@ -41,12 +56,15 @@ def main():
 
     parser = build_parser()
     args = parser.parse_args()
+    dataset = args.dataset
+    alpha = args.alpha
+    clients = args.clients
     
-    if args.dataset == "MNIST":
-        generate_mnist_partitions()
-    if args.dataset == "PACS-soft":
+    if dataset == "MNIST":
+        generate_mnist_partitions(alpha=alpha, n_clients=clients)
+    if dataset == "PACS-soft":
         generate_pacs_soft_partitions()
-    if args.dataset == "PACS-strict":
+    if dataset == "PACS-strict":
         generate_pacs_strict_partitions()
 
 if __name__ == "__main__":

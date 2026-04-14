@@ -6,10 +6,7 @@ import torchvision.transforms as transforms
 from fedlerate.data.transforms import Rotate, MinMaxScaler
 from fedlerate.data.partition import generate_partitions
 
-def generate_mnist_partitions():
-    
-    n_clients = 100
-    alpha = 1
+def generate_mnist_partitions(alpha, n_clients):
     
     # Load train & test sets
     trainset = MNIST(root="/tmp/app/data", train=True, download=True)
