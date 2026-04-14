@@ -11,6 +11,7 @@ from fedlerate.servers.server_fedmix import FedMixServer
 import hydra
 from pathlib import Path
 import numpy as np
+import json
 
 from omegaconf import OmegaConf
 
@@ -28,7 +29,7 @@ def app(config):
 
     OmegaConf.set_struct(config, False)
     
-    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "labels"]
+    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters"]
     for k in strategy_keys:
         if k not in config:
             config[k] = None
@@ -47,7 +48,6 @@ def app(config):
         fedprox_mu=config.fedprox_mu,
         ditto_lambda=config.ditto_lambda,
         n_clusters=config.n_clusters,
-        labels=config.labels
     )
 
     # Run experiment
@@ -70,9 +70,23 @@ def app(config):
         server = PerIFCAServer(d)
         server.run()
     if strategy == 'FCFL':
+        labels = np.load('../../../../' +config.labels_path)
+        with open('../../../../' + config.config_clustering_path, 'r') as f:
+            config_clustering = json.load(f)
+        
+        d.update({"strategy": f"FCFL-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
+        d.update({"labels":labels})
+        
         server = FCFLServer(d)
         server.run()
     if strategy == 'PerFCFL':
+        labels = np.load('../../../../' +config.labels_path)
+        with open('../../../../' + config.config_clustering_path, 'r') as f:
+            config_clustering = json.load(f)
+        
+        d.update({"strategy": f"PerFCFL-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
+        d.update({"labels":labels})
+
         server = PerFCFLServer(d)
         server.run()
     if strategy == 'FedMix':

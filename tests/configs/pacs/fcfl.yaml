@@ -11,7 +11,5 @@ hydra:
 
 strategy: FCFL
 n_clusters: 4
-labels: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-         2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-         3, 3, 3, 3, 3, 3, 3, 3, 3, 3,]
+labels_path: ../../MPC/mp-spdz-0.4.1/current/labels.npy
+config_clustering_path: ../../MPC/mp-spdz-0.4.1/current/config.json
