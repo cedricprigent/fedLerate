@@ -12,9 +12,11 @@ def generate_mnist_partitions(alpha, n_clients):
     trainset = MNIST(root="/tmp/app/data", train=True, download=True)
     testset = MNIST(root="/tmp/app/data", train=False, download=False)
 
+    clients_per_cluster = n_clients // 4
+
     # Prepare transforms for each client
     transform = [transforms.Compose([
-        Rotate((client // 25) * 90),
+        Rotate((client // clients_per_cluster) * 90),
         transforms.Lambda(lambda image: torch.tensor(np.array(image).astype(np.float32))),
         MinMaxScaler(min_value=0, max_value=255)
     ]) for client in range(n_clients)]
