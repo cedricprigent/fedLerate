@@ -1,6 +1,7 @@
 import argparse
 
 from fedlerate.datasets.mnist_partitions import generate_mnist_partitions
+from fedlerate.datasets.digits_drift_partitions import create_digits_drift_partitions
 from fedlerate.datasets.pacs_soft_partitions import generate_pacs_soft_partitions
 from fedlerate.datasets.pacs_strict_partitions import generate_pacs_strict_partitions
 
@@ -62,9 +63,11 @@ def main():
     
     if dataset == "MNIST":
         generate_mnist_partitions(alpha=alpha, n_clients=clients)
-    if dataset == "PACS-soft":
+    elif dataset == "DigitsDrift":
+        create_digits_drift_partitions(alpha=alpha, n_clients=clients)
+    elif dataset == "PACS-soft":
         generate_pacs_soft_partitions()
-    if dataset == "PACS-strict":
+    elif dataset == "PACS-strict":
         generate_pacs_strict_partitions()
 
 if __name__ == "__main__":
