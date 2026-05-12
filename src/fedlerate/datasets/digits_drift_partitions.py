@@ -1,138 +1,106 @@
 from torchvision import datasets, transforms
 from datasets import load_dataset
-from typing import List, Tuple
 import torch
 import os
-from torch.utils.data import TensorDataset, random_split, DataLoader
-from PIL import Image # Required for ImageFolder default_loader
-from fedlerate.datasets.pacs_soft_partitions import dirichlet_partitions
+import numpy as np
+from torch.utils.data import TensorDataset, DataLoader
+from datasets import Dataset as HFDataset
 
 def create_digits_drift_partitions(
-    alpha: float, # Not directly used for Dirichlet distribution in this specific partitioning scheme
+    alpha: float, 
     n_clients: int,
     data_dir: str = "/tmp/app/data"
 ) -> None:
-    """
-    Create federated digit drift partitions from MNIST, SVHN, and MNIST-M datasets.
-    Clients are distributed across these three domains.
     
-    Args:
-        alpha: Concentration parameter (not used for Dirichlet in this function, but for CLI consistency).
-        n_clients: Total number of federated clients.
-        data_dir: Directory to download datasets and where MNIST-M is expected.
-    """
     os.makedirs(os.path.join(data_dir, 'train'), exist_ok=True)
     os.makedirs(os.path.join(data_dir, 'test'), exist_ok=True)
 
+    # Note: Normalize with 3 values for RGB compatibility
     transform = transforms.Compose([
         transforms.Resize((28, 28)),
+        transforms.Lambda(lambda x: x.convert("RGB") if hasattr(x, "convert") else x),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
     
     print("#################################################")
     print("# Generating partitions for Digits Drift\t#")
-    print(f"# - alpha = {alpha}\t\t\t\t#")
     print(f"# - total clients = {n_clients}\t\t\t\t#")
     print("#################################################")
     
-    # Load datasets
-    mnist_train = datasets.MNIST(data_dir, train=True, download=True, transform=transform)
-    mnist_test = datasets.MNIST(data_dir, train=False, download=True, transform=transform)
+    # 1. Load original datasets (Lazy/Compressed)
+    mnist_train = datasets.MNIST(data_dir, train=True, download=True)
+    mnist_test = datasets.MNIST(data_dir, train=False, download=True)
 
-    svhn_train = datasets.SVHN(data_dir, split='train', download=True, transform=transform)
-    svhn_test = datasets.SVHN(data_dir, split='test', download=True, transform=transform)
+    svhn_train = datasets.SVHN(data_dir, split='train', download=True)
+    svhn_test = datasets.SVHN(data_dir, split='test', download=True)
 
     mnist_m = load_dataset("Mike0307/MNIST-M", cache_dir=data_dir)
     mnistm_train, mnistm_test = mnist_m["train"], mnist_m["test"]
 
-    dataset_names = ["MNIST", "SVHN", "MNIST-M"]
+    dataset_names = ["MNIST-M", "MNIST", "SVHN"]
+    all_train_datasets = [mnistm_train, mnist_train, svhn_train]
+    all_test_datasets = [mnistm_test, mnist_test, svhn_test]
 
-    all_train_datasets = [mnist_train, svhn_train, mnistm_train]
-    all_test_datasets = [mnist_test, svhn_test, mnistm_test]
-    
-    train_subsets = [None] * n_clients
-    test_subsets = [None] * n_clients
-
-    # Distribute clients as evenly as possible across the three datasets
+    # 2. Distribute client counts
     clients_per_dataset = [n_clients // len(all_train_datasets)] * len(all_train_datasets)
     for i in range(n_clients % len(all_train_datasets)):
         clients_per_dataset[i] += 1
 
-    client_idx_counter = 0
+    # Helper function to convert a specific slice of indices to a TensorDataset
+    def get_subset_as_tensor(full_ds, indices, transform):
+        data_list = []
+        targets_list = []
+        for idx in indices:
+            item = full_ds[int(idx)]
+            # HF vs Torchvision check
+            if isinstance(item, dict):
+                img, label = item["image"], item["label"]
+            else:
+                img, label = item
+            
+            # Ensure PIL for transform
+            if not isinstance(img, torch.Tensor):
+                if hasattr(img, "convert"):
+                    img = img.convert("RGB")
+            
+            data_list.append(transform(img))
+            targets_list.append(label)
+            
+        return TensorDataset(torch.stack(data_list), torch.tensor(targets_list))
+
+    client_global_idx = 0
+
+    # 3. Process Domain by Domain, Client by Client
     for ds_idx, (train_ds, test_ds) in enumerate(zip(all_train_datasets, all_test_datasets)):
-        num_clients_for_this_ds = clients_per_dataset[ds_idx]
-        print(f"Assigning {num_clients_for_this_ds} clients to {dataset_names[ds_idx]}")
-
-        if num_clients_for_this_ds == 0:
-            continue
-
-        # Helper to convert any dataset to TensorDataset for consistent splitting and saving
-        def to_tensor_dataset(dataset):
-            data_list = []
-            targets_list = []
-            for i in range(len(dataset)):
-                img, label = dataset[i]
-                data_list.append(img)
-                targets_list.append(label)
-            return TensorDataset(torch.stack(data_list), torch.tensor(targets_list))
-
-        full_train_tensor_ds = to_tensor_dataset(train_ds)
-        full_test_tensor_ds = to_tensor_dataset(test_ds)
-
-        # Split the full dataset for this domain into `num_clients_for_this_ds` parts
-        train_lengths = [len(full_train_tensor_ds) // num_clients_for_this_ds] * num_clients_for_this_ds
-        for i in range(len(full_train_tensor_ds) % num_clients_for_this_ds):
-            train_lengths[i] += 1
+        n_clients_here = clients_per_dataset[ds_idx]
+        if n_clients_here == 0: continue
         
-        test_lengths = [len(full_test_tensor_ds) // num_clients_for_this_ds] * num_clients_for_this_ds
-        for i in range(len(full_test_tensor_ds) % num_clients_for_this_ds):
-            test_lengths[i] += 1
+        print(f"Processing {dataset_names[ds_idx]} for {n_clients_here} clients...")
 
-        split_train_ds = random_split(full_train_tensor_ds, train_lengths)
-        split_test_ds = random_split(full_test_tensor_ds, test_lengths)
+        # Shuffle indices for this domain
+        train_idxs = np.random.permutation(len(train_ds))
+        test_idxs = np.random.permutation(len(test_ds))
 
-        for i in range(num_clients_for_this_ds):
-            train_subsets[client_idx_counter] = split_train_ds[i]
-            test_subsets[client_idx_counter] = split_test_ds[i]
-            client_idx_counter += 1
+        # Split indices
+        train_splits = np.array_split(train_idxs, n_clients_here)
+        test_splits = np.array_split(test_idxs, n_clients_here)
 
-    # Save subsets
-    for i, (train_subset, test_subset) in enumerate(zip(train_subsets, test_subsets)):
-        if train_subset is not None and test_subset is not None: # Ensure subset was assigned
-            print(f"subset {i}: {len(train_subset)} train data, {len(test_subset)} test data")
-            torch.save(train_subset, os.path.join(data_dir, f"train/train_subset-{i}.pth"))
-            torch.save(test_subset, os.path.join(data_dir, f"test/test_subset-{i}.pth"))
-        else:
-            print(f"subset {i}: No data assigned (this should not happen if n_clients > 0)")
+        for c_local_idx in range(n_clients_here):
+            # Create and Save Train Subset
+            train_tensor_ds = get_subset_as_tensor(train_ds, train_splits[c_local_idx], transform)
+            torch.save(train_tensor_ds, os.path.join(data_dir, f"train/train_subset-{client_global_idx}.pth"))
+            
+            # Create and Save Test Subset
+            test_tensor_ds = get_subset_as_tensor(test_ds, test_splits[c_local_idx], transform)
+            torch.save(test_tensor_ds, os.path.join(data_dir, f"test/test_subset-{client_global_idx}.pth"))
+            
+            print(f" Saved client {client_global_idx} ({dataset_names[ds_idx]}): {len(train_tensor_ds)} train samples")
+            
+            # CRITICAL: Clean up memory after each client
+            del train_tensor_ds
+            del test_tensor_ds
+            
+            client_global_idx += 1
 
-    train_loaders = [DataLoader(ds, batch_size=32, shuffle=True) for ds in all_train_datasets]
-    test_loaders = [DataLoader(ds, batch_size=32, shuffle=True) for ds in all_test_datasets]
-
-    for idx, (test_loader, train_loader) in enumerate(zip(test_loaders, train_loaders)):
-        n_partitions = clients_per_dataset[idx]
-        
-        train_partitions = dirichlet_partitions(dataset=train_loader.dataset, num_clients=n_partitions, alpha=alpha, transform=transform)
-        test_partitions = dirichlet_partitions(dataset=test_loader.dataset, num_clients=n_partitions, alpha=alpha, transform=transform)
-        
-        train_subsets = []
-        test_subsets = []
-        for train_partition, test_partition in zip(train_partitions, test_partitions):
-
-            train = torch.utils.data.TensorDataset(
-                torch.from_numpy(train_partition.data),
-                torch.from_numpy(train_partition.targets)
-            )
-
-            test = torch.utils.data.TensorDataset(
-                torch.from_numpy(test_partition.data),
-                torch.from_numpy(test_partition.targets)
-            )
-            train_subsets.append(train)
-            test_subsets.append(test)
-        
-        for i, (train_subset, test_subset) in enumerate(zip(train_subsets, test_subsets)):
-                print(f"subset {i + idx * n_partitions}: {len(train_subset)} train data, {len(test_subset)} test data")
-        
-                torch.save(train_subset, f"/tmp/app/data/train/train_subset-{i + idx * n_partitions}.pth")
-                torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i + idx * n_partitions}.pth")
+    print("\nAll partitions created successfully.")
