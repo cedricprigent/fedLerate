@@ -34,7 +34,7 @@ class ServerABC(ABC):
             writer.writerow(metrics)
 
     def _log_metrics(self, metrics: dict):
-        self.log.info(f"Avg accuracy: {"{:.3f}".format(metrics['accuracy'])} - Avg loss: {"{:.3f}".format(metrics['loss'])}")
+        self.log.info(f"Avg accuracy: {'{:.3f}'.format(metrics['accuracy'])} - Avg loss: {'{:.3f}'.format(metrics['loss'])}")
 
     @abstractmethod
     def train(self):
