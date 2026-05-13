@@ -1,6 +1,6 @@
 import mlflow
 import pandas as pd
-import os
+import os, shutil
 
 
 def mlflow_scenario(scenario, logdir):
@@ -26,7 +26,11 @@ def mlflow_scenario(scenario, logdir):
                 mlflow.log_metric("accuracy", row["accuracy"], step=row["round"])
 
 if __name__ == "__main__":
-    os.rmdir('mlruns')
+    shutil.rmtree('mlruns')
+
+    scenario = "Digits"
+    logdir = os.path.join("logs", "digits")
+    mlflow_scenario(scenario, logdir)
 
     scenario = "MNIST"
     logdir = os.path.join("logs", "mnist")
