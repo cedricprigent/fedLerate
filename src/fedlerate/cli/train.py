@@ -15,9 +15,9 @@ import json
 
 from omegaconf import OmegaConf
 
-# python app.py --config-path conf --config_name config
-@hydra.main(config_path='config', config_name='config', version_base=None)
-def app(config):
+# python main.py --config-dir conf --config_name config
+@hydra.main(config_path=None, config_name=None, version_base=None)
+def main(config):
 
     # Hydra changes working directory to run dir
     run_dir = Path.cwd()
@@ -94,4 +94,4 @@ def app(config):
         server.run()
 
 if __name__ == '__main__':
-    app()
+    main()

@@ -9,9 +9,9 @@ strategies=(
     "per_ifca"
     "fcfl" 
     "per_fcfl" 
-    "fedmix"
+    # "fedmix"
 )
 
 for strategy in ${strategies[@]}; do
-    python test_app.py --config-path ../tests/configs/mnist --config-name $strategy
+    fedlerate-train --config-dir ../tests/configs/mnist --config-name $strategy
 done;

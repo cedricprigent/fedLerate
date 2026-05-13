@@ -13,5 +13,5 @@ strategies=(
 )
 
 for strategy in ${strategies[@]}; do
-    python test_app.py --config-path ../tests/configs/pacs --config-name $strategy
+    fedlerate-train --config-dir ../tests/configs/pacs --config-name $strategy
 done;

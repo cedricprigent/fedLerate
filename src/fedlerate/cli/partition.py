@@ -11,32 +11,21 @@ def build_parser():
         description="fedLerate CLI"
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True
-    )
-
-    # ---- partition command ----
-    partition_parser = subparsers.add_parser(
-        "partition",
-        help="Generate client partitions"
-    )
-
-    partition_parser.add_argument(
+    parser.add_argument(
         "-d", "--dataset",
         required=True,
         type=str,
         help="Dataset name"
     )
 
-    partition_parser.add_argument(
+    parser.add_argument(
         "-a", "--alpha",
         required=True,
         type=float,
         help="Concentration parameter"
     )
 
-    partition_parser.add_argument(
+    parser.add_argument(
         "-c", "--clients",
         required=True,
         type=int,

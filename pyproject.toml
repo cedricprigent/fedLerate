@@ -12,10 +12,16 @@ authors = [
 ]
 license = { text = "MIT" }
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+  "datasets",
+  "torch",
+  "numpy",
+  "torchvision"
+]
 
 [project.urls]
 Homepage = "https://github.com/cedricprigent/fedlerate"
 
 [project.scripts]
-fedlerate = "fedlerate.cli:main"
+fedlerate-partition = "fedlerate.cli.partition:main"
+fedlerate-train = "fedlerate.cli.train:main"
