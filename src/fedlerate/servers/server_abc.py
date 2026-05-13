@@ -15,7 +15,7 @@ class ServerABC(ABC):
         self.strategy = config['strategy']
 
         logging.basicConfig(level=logging.INFO)
-        self.log = logging.getLogger(__name__)
+        self.log = logging.getLogger(self.__class__.__module__)
 
     def _save_metrics(self, metrics: dict, file_path: str):
         # Check if file exists to decide whether to write header
