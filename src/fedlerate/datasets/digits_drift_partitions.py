@@ -6,6 +6,61 @@ import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 from datasets import Dataset as HFDataset
 
+def get_targets(ds):
+    """Extract labels from different dataset formats."""
+    if hasattr(ds, 'targets'): # MNIST
+        return np.array(ds.targets)
+    if hasattr(ds, 'labels'): # SVHN
+        return np.array(ds.labels)
+    # Hugging Face or other dictionary-like datasets
+    try:
+        return np.array(ds['label'])
+    except:
+        pass
+    
+    # Fallback
+    targets = []
+    for i in range(len(ds)):
+        item = ds[i]
+        targets.append(item['label'] if isinstance(item, dict) else item[1])
+    return np.array(targets)
+
+def get_dirichlet_indices(targets, n_clients, alpha):
+    """Generate Dirichlet-based indices for clients, with size balancing and minimum size guarantee."""
+    n_classes = len(np.unique(targets))
+    label_indices = [np.where(targets == i)[0] for i in range(n_classes)]
+    
+    min_size = 0
+    while min_size < 10:
+        client_indices = [[] for _ in range(n_clients)]
+        for k in range(n_classes):
+            np.random.shuffle(label_indices[k])
+            
+            # Dirichlet partitioning with size balancing
+            proportions = np.random.dirichlet(np.repeat(alpha, n_clients))
+            proportions = np.array([
+                p * (len(idx_j) < len(targets) / n_clients)
+                for p, idx_j in zip(proportions, client_indices)
+            ])
+            
+            if proportions.sum() == 0:
+                proportions = np.ones(n_clients) / n_clients
+            else:
+                proportions = proportions / proportions.sum()
+                
+            proportions = (np.cumsum(proportions) * len(label_indices[k])).astype(int)[:-1]
+            
+            splits = np.split(label_indices[k], proportions)
+            for i in range(n_clients):
+                client_indices[i].extend(splits[i].tolist())
+        
+        min_size = min([len(idx_j) for idx_j in client_indices])
+            
+    for i in range(n_clients):
+        np.random.shuffle(client_indices[i])
+        
+    return client_indices
+
 def create_digits_drift_partitions(
     alpha: float, 
     n_clients: int,
@@ -78,13 +133,13 @@ def create_digits_drift_partitions(
         
         print(f"Processing {dataset_names[ds_idx]} for {n_clients_here} clients...")
 
-        # Shuffle indices for this domain
-        train_idxs = np.random.permutation(len(train_ds))
-        test_idxs = np.random.permutation(len(test_ds))
+        # Get targets for Dirichlet partitioning
+        train_targets = get_targets(train_ds)
+        test_targets = get_targets(test_ds)
 
-        # Split indices
-        train_splits = np.array_split(train_idxs, n_clients_here)
-        test_splits = np.array_split(test_idxs, n_clients_here)
+        # Generate Dirichlet splits
+        train_splits = get_dirichlet_indices(train_targets, n_clients_here, alpha)
+        test_splits = get_dirichlet_indices(test_targets, n_clients_here, alpha)
 
         for c_local_idx in range(n_clients_here):
             # Create and Save Train Subset

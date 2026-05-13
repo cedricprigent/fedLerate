@@ -1,0 +1,15 @@
+defaults:
+- scenario: digits
+
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/per_fcfl/${now:%Y-%m-%d}-${now:%H-%M-%S}
+
+
+strategy: PerFCFL
+n_clusters: 3
+labels_path: ../../MPC/mp-spdz-0.4.1/current/labels.npy
+config_clustering_path: ../../MPC/mp-spdz-0.4.1/current/config.json

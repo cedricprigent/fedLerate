@@ -1,0 +1,11 @@
+defaults:
+- scenario: digits
+
+strategy:
+  FedPer
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/fedper/${now:%Y-%m-%d}-${now:%H-%M-%S}

@@ -1,0 +1,13 @@
+defaults:
+- scenario: digits
+
+strategy:
+  FedMix
+
+n_clusters: 3
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/fedmix/${now:%Y-%m-%d}-${now:%H-%M-%S}

@@ -1,0 +1,13 @@
+defaults:
+- scenario: digits
+
+strategy:
+  FedProx
+
+fedprox_mu: 0.01
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/fedprox/${now:%Y-%m-%d}-${now:%H-%M-%S}

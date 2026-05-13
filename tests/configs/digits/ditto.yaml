@@ -1,0 +1,13 @@
+defaults:
+- scenario: digits
+
+strategy:
+  Ditto
+
+ditto_lambda: 0.1
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/ditto/${now:%Y-%m-%d}-${now:%H-%M-%S}

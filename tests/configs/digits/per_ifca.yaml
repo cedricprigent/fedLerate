@@ -1,0 +1,13 @@
+defaults:
+- scenario: digits
+
+strategy:
+  PerIFCA
+
+n_clusters: 3
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/per_ifca/${now:%Y-%m-%d}-${now:%H-%M-%S}

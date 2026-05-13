@@ -1,0 +1,11 @@
+defaults:
+- scenario: digits
+
+strategy:
+  FedAvg
+
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: logs/digits/fedavg/${now:%Y-%m-%d}-${now:%H-%M-%S}
