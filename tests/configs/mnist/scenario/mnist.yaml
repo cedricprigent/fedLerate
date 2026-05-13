@@ -3,6 +3,6 @@ dataset: mnist
 n_rounds: 50
 n_clients: 500
 n_clients_per_round: 100
-local_epochs: 50
+local_epochs: 1
 batch_size: 64
 local_lr: 3e-3
