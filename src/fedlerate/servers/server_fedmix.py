@@ -12,8 +12,9 @@ class FedMixServer(CFLServer):
         self.clients = [FedMixClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
         
     def broadcast_model(self, clients, models):
+        weights = [model.state_dict() for model in models]
         for client in clients:
-            client.set_model_weights([model.state_dict() for model in models])
+            client.set_model_weights(weights)
 
     def train(self):
         # Main training loop
@@ -24,12 +25,12 @@ class FedMixServer(CFLServer):
 
             selected_clients = self.select_clients()
 
-            # Train each cluster model with its assigned clients
-            updates = []
-            for client in self.clients:
-                # Local training
-                self.broadcast_model(selected_clients, self.models)
+            # Broadcast updated models to selected clients only for training
+            self.broadcast_model(selected_clients, self.models)
 
+            # Local training for selected clients
+            updates = []
+            for client in selected_clients:
                 update = client.train()
                 updates.append(update)
 
@@ -38,8 +39,8 @@ class FedMixServer(CFLServer):
 
             total_loss = sum(update['loss'] for update in updates)
 
-            # Evaluate
-            self.broadcast_model(selected_clients, self.models)
+            # Evaluate - Broadcast to all clients for global evaluation
+            self.broadcast_model(self.clients, self.models)
             accs = self.evaluate()
 
             metrics = {
@@ -53,9 +54,15 @@ class FedMixServer(CFLServer):
             self._log_metrics(metrics)
 
     def aggregate(self, client_updates):
+        if not client_updates:
+            return
         total_data_size = sum(update['data_size'] for update in client_updates)
+        if total_data_size == 0:
+            return
+
         for k in range(self.config['n_clusters']):
+            model_keys = client_updates[0]['weights'][k].keys()
             cum_weights = {}
-            for key in self.models[k].state_dict().keys():
+            for key in model_keys:
                 cum_weights[key] = sum(update['weights'][k][key] * update['data_size'] for update in client_updates) / total_data_size
             self.models[k].load_state_dict(cum_weights)
