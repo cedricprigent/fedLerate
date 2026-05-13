@@ -12,8 +12,9 @@ class CFLServer(ServerABC):
         self.models = [load_model(self.config['model_name'], device='cpu') for _ in range(self.config['n_clusters'])]
 
     def broadcast_model(self, clients, model):
+        weights = model.state_dict()
         for client in clients:
-            client.set_model_weights(model.state_dict())
+            client.set_model_weights(weights)
     
     def select_clients(self):
         n_clients = len(self.clients)
