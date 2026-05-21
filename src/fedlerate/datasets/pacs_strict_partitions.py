@@ -29,6 +29,7 @@ def dirichlet_partitions(
         dataset.targets = np.array(dataset.targets, dtype=np.int64)
     idx = [np.where(dataset.targets == i)[0] for i in range(NUM_CLASS)]
 
+    # Ensure each client owns at least 10 data samples
     while MIN_SIZE < 10:
         idx_batch = [[] for _ in range(num_clients)]
         for k in range(NUM_CLASS):
@@ -66,7 +67,7 @@ def dirichlet_partitions(
     return datasets
 
 
-def generate_pacs_strict_partitions(n_partitions=10, alpha=10):
+def generate_pacs_strict_partitions(n_partitions_per_domain=10, alpha=10):
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
 
@@ -86,12 +87,12 @@ def generate_pacs_strict_partitions(n_partitions=10, alpha=10):
     print("#################################################")
     print("# Generating partitions for PACS dataset\t#")
     print(f"# - alpha = {alpha}\t\t\t\t\t#")
-    print(f"# - partitions per domain = {n_partitions}\t\t\t#")
-    print(f"# - total partitions = {n_partitions*4}\t\t\t#")
+    print(f"# - partitions per domain = {n_partitions_per_domain}\t\t\t#")
+    print(f"# - total partitions = {n_partitions_per_domain*4}\t\t\t#")
     print("#################################################")
 
     for dataloader_idx in range(4):
-        partitions = dirichlet_partitions(dataset=dataloaders[dataloader_idx].dataset, num_clients=n_partitions, alpha=alpha, transform=transform)
+        partitions = dirichlet_partitions(dataset=dataloaders[dataloader_idx].dataset, num_clients=n_partitions_per_domain, alpha=alpha, transform=transform)
         
         train_subsets = []
         test_subsets = []
@@ -113,7 +114,7 @@ def generate_pacs_strict_partitions(n_partitions=10, alpha=10):
             test_subsets.append(test)
         
         for i, (train_subset, test_subset) in enumerate(zip(train_subsets, test_subsets)):
-                print(f"subset {i + dataloader_idx * n_partitions}: {len(train_subset)} train data, {len(test_subset)} test data")
+                print(f"subset {i + dataloader_idx * n_partitions_per_domain}: {len(train_subset)} train data, {len(test_subset)} test data")
         
-                torch.save(train_subset, f"/tmp/app/data/train/train_subset-{i + dataloader_idx * n_partitions}.pth")
-                torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i + dataloader_idx * n_partitions}.pth")
+                torch.save(train_subset, f"/tmp/app/data/train/train_subset-{i + dataloader_idx * n_partitions_per_domain}.pth")
+                torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i + dataloader_idx * n_partitions_per_domain}.pth")

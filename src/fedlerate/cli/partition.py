@@ -57,7 +57,7 @@ def main():
     elif dataset == "PACS-soft":
         generate_pacs_soft_partitions()
     elif dataset == "PACS-strict":
-        generate_pacs_strict_partitions()
+        generate_pacs_strict_partitions(alpha=alpha, n_partitions_per_domain=clients//4)
 
 if __name__ == "__main__":
     main()
