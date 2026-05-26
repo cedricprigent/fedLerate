@@ -1,4 +1,5 @@
 import argparse
+import random
 
 from fedlerate.datasets.mnist_partitions import generate_mnist_partitions
 from fedlerate.datasets.digits_drift_partitions import create_digits_drift_partitions
@@ -32,6 +33,12 @@ def build_parser():
         help="Number of clients/partitions"
     )
 
+    parser.add_argument(
+        "-s", "--seed",
+        type=int,
+        help="Set random seed for generation"
+    )
+
     return parser
 
 def main():
@@ -49,6 +56,8 @@ def main():
     dataset = args.dataset
     alpha = args.alpha
     clients = args.clients
+
+    random.seed(args.seed)
     
     if dataset == "MNIST":
         generate_mnist_partitions(alpha=alpha, n_clients=clients)
