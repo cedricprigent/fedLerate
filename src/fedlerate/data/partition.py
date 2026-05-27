@@ -61,7 +61,7 @@ def dirichlet_partitions(
     else:
         datasets = [
             torch.utils.data.TensorDataset(
-                X[j],
+                torch.as_tensor(X[j], dtype=torch.float32),
                 torch.from_numpy(Y[j])
             ) for j in range(num_clients)
         ]
@@ -101,33 +101,38 @@ def generate_partitions(trainset, testset, n_partitions, alpha, transform, seed=
 
 
 
-def load_partition(num_partition, batch_size=16, transform=None, target_transform=None):
-    """Load generated train and test subset"""
-    """Generating partitions with partition_data.py is needed beforehand"""
-    # Load train & test subsets
-    trainset = torch.load(f"/tmp/app/data/train/train_subset-{num_partition}.pth", weights_only=False)
-    testset = torch.load(f"/tmp/app/data/test/test_subset-{num_partition}.pth", weights_only=False)
 
-    trainset.target_transform = target_transform
-    testset.target_transform = target_transform
-    trainset.transform = transform
-    testset.transform = transform
+_PARTITION_CACHE = {}
+
+def load_partition(num_partition, batch_size=16, transform=None, target_transform=None):
+    """Load generated train and test subset with in-memory caching"""
+    if num_partition in _PARTITION_CACHE:
+        trainset, testset = _PARTITION_CACHE[num_partition]
+    else:
+        train_path = f"/tmp/app/data/train/train_subset-{num_partition}.pth"
+        test_path = f"/tmp/app/data/test/test_subset-{num_partition}.pth"
+        trainset = torch.load(train_path, weights_only=False)
+        testset = torch.load(test_path, weights_only=False)
+        _PARTITION_CACHE[num_partition] = (trainset, testset)
 
     # Generate dataloaders
     trainloader = DataLoader(
             trainset,
             batch_size=batch_size,
-            shuffle=True
+            shuffle=True,
+            pin_memory=True
         )
 
     testloader = DataLoader(
             testset,
             batch_size=batch_size,
-            shuffle=True
+            shuffle=True,
+            pin_memory=True
         )
 
     num_examples = {"trainset": len(trainloader), "testset": len(testloader)}
     return trainloader, testloader, num_examples
+
 
 
 class FolderPartition(Dataset):

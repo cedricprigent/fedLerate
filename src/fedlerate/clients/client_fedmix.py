@@ -12,6 +12,10 @@ class FedMixClient(ClientABC):
         self.init_data()
 
     def train(self):
+        # Move models to device
+        for model in self.models:
+            model.to(self.device)
+
         # Train local model on client data
         # Return model update and data size for aggregation
         loss, _ = train_fedmix(self.models,
@@ -22,13 +26,25 @@ class FedMixClient(ClientABC):
             device=self.device
         )
 
+        weights = self.get_model_weights()
+
+        # Move models back to CPU
+        for model in self.models:
+            model.to('cpu')
+        if self.device.type == 'cuda':
+            torch.cuda.empty_cache()
+
         return {
-            "weights": self.get_model_weights(),
+            "weights": weights,
             "data_size": self.trainloader.dataset.__len__(),
             "loss": loss
         }
 
     def evaluate(self):
+        # Move models to device
+        for model in self.models:
+            model.to(self.device)
+
         # Evaluate local model on client test data
         # Return accuracy or other metrics
         accuracy = evaluate_fedmix(self.models,
@@ -36,14 +52,22 @@ class FedMixClient(ClientABC):
             dataloader=self.testloader, 
             device=self.device
         )
+
+        # Move models back to CPU
+        for model in self.models:
+            model.to('cpu')
+        if self.device.type == 'cuda':
+            torch.cuda.empty_cache()
+
         return accuracy
 
     def init_model(self, k):
         # Initialize mixture of experts
         self.weights = torch.nn.Parameter(torch.ones(k, device=self.device) / k)
 
+        # Initialize models on CPU to save GPU memory. They will be moved to device during train/evaluate.
         self.models = [
-            load_model(self.config['model_name'], device=self.device) for _ in range(k)
+            load_model(self.config['model_name'], device='cpu') for _ in range(k)
         ]
 
     def init_data(self):
