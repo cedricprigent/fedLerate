@@ -29,10 +29,16 @@ def main(config):
 
     OmegaConf.set_struct(config, False)
     
-    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters"]
+    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "n_jobs"]
     for k in strategy_keys:
         if k not in config:
             config[k] = None
+    
+    # Ensure n_jobs is at least 1 and not None
+    if config.n_jobs is None:
+        config.n_jobs = 1
+    
+    print(f'### Starting {strategy} on {dataset} with n_jobs={config.n_jobs} ###')
 
     # Base parameters
     d = dict(
@@ -48,6 +54,7 @@ def main(config):
         fedprox_mu=config.fedprox_mu,
         ditto_lambda=config.ditto_lambda,
         n_clusters=config.n_clusters,
+        n_jobs=config.n_jobs,
     )
 
     # Run experiment
@@ -69,25 +76,44 @@ def main(config):
     if strategy == 'PerIFCA':
         server = PerIFCAServer(d)
         server.run()
-    if strategy == 'FCFL':
-        labels = np.load('../../../../' +config.labels_path)
-        with open('../../../../' + config.config_clustering_path, 'r') as f:
-            config_clustering = json.load(f)
+    if strategy in ['FCFL', 'PerFCFL']:
+        # Hydra changes the CWD to the run directory. 
+        # We need to look 4 levels up to reach the MPC project root.
+        root_prefix = Path('../../../../')
         
-        d.update({"strategy": f"FCFL-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
-        d.update({"labels":labels})
+        # Check for best_k_path in config
+        if 'best_k_path' in config and config.best_k_path:
+            best_k_path = root_prefix / config.best_k_path
+            if best_k_path.exists():
+                with open(best_k_path, 'r') as f:
+                    d['n_clusters'] = int(f.read().strip())
         
-        server = FCFLServer(d)
-        server.run()
-    if strategy == 'PerFCFL':
-        labels = np.load('../../../../' +config.labels_path)
-        with open('../../../../' + config.config_clustering_path, 'r') as f:
-            config_clustering = json.load(f)
-        
-        d.update({"strategy": f"PerFCFL-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
-        d.update({"labels":labels})
+        # Fallback to current/best_k.txt at root if n_clusters still not set
+        if d['n_clusters'] is None:
+            fallback_k = root_prefix / 'current/best_k.txt'
+            if fallback_k.exists():
+                 with open(fallback_k, 'r') as f:
+                    d['n_clusters'] = int(f.read().strip())
 
-        server = PerFCFLServer(d)
+        # Load labels
+        labels_npy_path = root_prefix / 'current/labels.npy'
+        if labels_npy_path.exists():
+            labels = np.load(labels_npy_path)
+        else:
+            labels = np.load(root_prefix / config.labels_path)
+            
+        with open(root_prefix / config.config_clustering_path, 'r') as f:
+            config_clustering = json.load(f)
+        
+        d.update({"strategy": f"{strategy}-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
+        d.update({"labels": labels})
+        if d['n_clusters'] is None:
+            d['n_clusters'] = len(np.unique(labels))
+        
+        if strategy == 'FCFL':
+            server = FCFLServer(d)
+        else:
+            server = PerFCFLServer(d)
         server.run()
     if strategy == 'FedMix':
         server = FedMixServer(d)
