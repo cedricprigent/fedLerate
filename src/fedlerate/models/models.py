@@ -138,6 +138,51 @@ class PFL_ResNet18(nn.Module):
         x = self.local_layers(x)
         return x
 
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 32)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class Decoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(32, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256)
+        )
+
+    def forward(self, z):
+        return self.net(z)
+
+
+class AutoEncoder(nn.Module):
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, x):
+        z = self.encoder(x)
+        return self.decoder(z)
+    
+class PFL_AutoEncoder(nn.Module):
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.global_layers = encoder
+        self.local_layers = decoder
+
+    def forward(self, x):
+        z = self.global_layers(x)
+        return self.local_layers(z)
 
 def load_model(model_name, device):
 
@@ -158,6 +203,14 @@ def load_model(model_name, device):
         model.fc = torch.nn.Linear(model.fc.in_features, 7).to(device)
     elif model_name == 'PFL_ResNet18':
         model = PFL_ResNet18().to(device)
+    elif model_name == 'AutoEncoder':
+        encoder = Encoder().to(device)
+        decoder = Decoder().to(device)
+        model = AutoEncoder(encoder, decoder).to(device)
+    elif model_name == 'PFL_AutoEncoder':
+        encoder = Encoder().to(device)
+        decoder = Decoder().to(device)
+        model = PFL_AutoEncoder(encoder, decoder).to(device)
     else:
         raise NotImplementedError
 

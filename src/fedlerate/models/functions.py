@@ -1,3 +1,4 @@
+from fedlerate.models.models import PFL_AutoEncoder
 import torch
 import torch.nn.functional as F
 import copy
@@ -6,42 +7,73 @@ import copy
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 
 def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    if isinstance(model, PFL_AutoEncoder):
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    model.train()
+        model.train()
 
-    for epoch in range(epochs):
-        train_loss = 0
-        train_accuracy = 0
+        for epoch in range(epochs):
+            train_loss = 0
+            for batch, x in enumerate(dataloader):
+                if isinstance(x, (list, tuple)): x = x[0]
+                x = x.to(device)
+                # Forward pass
+                output = model(x)
 
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+                # Calculate loss
+                loss = criterion(output, x)
+                train_loss += loss.item()
 
-            # Forward pass
-            output = model(x)
+                # Zero grad
+                optimizer.zero_grad()
+                
+                # Backprog
+                loss.backward()
 
-            # Calculate loss
-            loss = criterion(output, y)
-            train_loss += loss.item()
-            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+                # Optimize
+                optimizer.step()
 
-            # Zero grad
-            optimizer.zero_grad()
-            
-            # Backprog
-            loss.backward()
+        train_loss = train_loss / len(dataloader)
+        return train_loss, 0.0
 
-            # Optimize
-            optimizer.step()
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    train_loss = train_loss / len(dataloader)
-    train_accuracy = train_accuracy / len(dataloader)
-    
-    return train_loss, train_accuracy
+        model.train()
+
+        for epoch in range(epochs):
+            train_loss = 0
+            train_accuracy = 0
+
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
+
+                # Forward pass
+                output = model(x)
+
+                # Calculate loss
+                loss = criterion(output, y)
+                train_loss += loss.item()
+                train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+
+                # Zero grad
+                optimizer.zero_grad()
+                
+                # Backprog
+                loss.backward()
+
+                # Optimize
+                optimizer.step()
+
+        train_loss = train_loss / len(dataloader)
+        train_accuracy = train_accuracy / len(dataloader)
+        return train_loss, train_accuracy
+
 
 def accuracy_fn(y_true, y_pred):
     """Calculates accuracy between truth labels and predictions.
@@ -60,43 +92,74 @@ def accuracy_fn(y_true, y_pred):
 
 
 def train_fedprox(model, dataloader, epochs, mu=0.01, lr=3e-4, device=DEVICE):
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    global_model = copy.deepcopy(model)
+    if isinstance(model, PFL_AutoEncoder):
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        global_model = copy.deepcopy(model)
+        model.train()
 
-    model.train()
+        for epoch in range(epochs):
+            train_loss = 0
 
-    for epoch in range(epochs):
-        train_loss = 0
-        train_accuracy = 0
+            for batch, x in enumerate(dataloader):
+                if isinstance(x, (list, tuple)): x = x[0]
+                x = x.to(device)
+                # Forward pass
+                output = model(x)
 
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+                # Calculate loss
+                loss = criterion(output, x) + proximal_term(model, global_model, mu=mu)
+                train_loss += loss.item()
 
-            # Forward pass
-            output = model(x)
+                # Zero grad
+                optimizer.zero_grad()
 
-            # Calculate loss
-            loss = criterion(output, y) + proximal_term(model, global_model, mu=mu)
-            train_loss += loss.item()
-            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+                # Backprog
+                loss.backward()
 
-            # Zero grad
-            optimizer.zero_grad()
+                # Optimize
+                optimizer.step()
 
-            # Backprog
-            loss.backward()
+        train_loss = train_loss / len(dataloader)
+        return train_loss, 0.0
 
-            # Optimize
-            optimizer.step()
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        global_model = copy.deepcopy(model)
 
-    train_loss = train_loss / len(dataloader)
-    train_accuracy = train_accuracy / len(dataloader)
+        model.train()
 
-    return train_loss, train_accuracy
+        for epoch in range(epochs):
+            train_loss = 0
+            train_accuracy = 0
+
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
+
+                # Forward pass
+                output = model(x)
+
+                # Calculate loss
+                loss = criterion(output, y) + proximal_term(model, global_model, mu=mu)
+                train_loss += loss.item()
+                train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+
+                # Zero grad
+                optimizer.zero_grad()
+
+                # Backprog
+                loss.backward()
+
+                # Optimize
+                optimizer.step()
+
+        train_loss = train_loss / len(dataloader)
+        train_accuracy = train_accuracy / len(dataloader)
+        return train_loss, train_accuracy
 
 
 def proximal_term(model, global_model, mu):
@@ -108,142 +171,238 @@ def proximal_term(model, global_model, mu):
 
 
 def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, lambda_=0.5, device=DEVICE):
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(personalized_model.parameters(), lr=lr)
+    if isinstance(personalized_model, PFL_AutoEncoder):
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(personalized_model.parameters(), lr=lr)
 
-    personalized_model.train()
+        personalized_model.train()
 
-    for epoch in range(epochs):
-        train_loss = 0
-        train_accuracy = 0
+        for epoch in range(epochs):
+            train_loss = 0
 
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+            for batch, x in enumerate(dataloader):
+                if isinstance(x, (list, tuple)): x = x[0]
+                x = x.to(device)
+                # Forward pass
+                output = personalized_model(x)
 
-            # Forward pass
-            output = personalized_model(x)
+                # Calculate loss
+                prox = 0
+                for param, global_param in zip(personalized_model.parameters(), global_model.parameters()):
+                    prox += (param - global_param).norm(2)
+                loss = criterion(output, x) + lambda_ * prox
+                train_loss += loss.item()
 
-            # Calculate loss
-            prox = 0
-            for param, global_param in zip(personalized_model.parameters(), global_model.parameters()):
-                prox += (param - global_param).norm(2)
-            loss = criterion(output, y) + lambda_ * prox
-            train_loss += loss.item()
-            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+                # Zero grad
+                optimizer.zero_grad()
 
-            # Zero grad
-            optimizer.zero_grad()
+                # Backprog
+                loss.backward()
 
-            # Backprog
-            loss.backward()
+                # Optimize
+                optimizer.step()
 
-            # Optimize
-            optimizer.step()
+        train_loss = train_loss / len(dataloader)
+        return train_loss, 0.0
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(personalized_model.parameters(), lr=lr)
 
-    train_loss = train_loss / len(dataloader)
-    train_accuracy = train_accuracy / len(dataloader)
+        personalized_model.train()
 
-    return train_loss, train_accuracy
+        for epoch in range(epochs):
+            train_loss = 0
+            train_accuracy = 0
+
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
+
+                # Forward pass
+                output = personalized_model(x)
+
+                # Calculate loss
+                prox = 0
+                for param, global_param in zip(personalized_model.parameters(), global_model.parameters()):
+                    prox += (param - global_param).norm(2)
+                loss = criterion(output, y) + lambda_ * prox
+                train_loss += loss.item()
+                train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+
+                # Zero grad
+                optimizer.zero_grad()
+
+                # Backprog
+                loss.backward()
+
+                # Optimize
+                optimizer.step()
+
+        train_loss = train_loss / len(dataloader)
+        train_accuracy = train_accuracy / len(dataloader)
+        return train_loss, train_accuracy
 
 
 def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
-    criterion = torch.nn.CrossEntropyLoss()
-    params = [weights]
-    for model in models:
-        params += list(model.parameters())
-    optimizer = torch.optim.Adam(params, lr=lr)
-    k = len(models)
+    if isinstance(models[0], PFL_AutoEncoder):
+        criterion = torch.nn.MSELoss()
+        params = [weights]
+        for model in models:
+            params += list(model.parameters())
+        optimizer = torch.optim.Adam(params, lr=lr)
 
-    for epoch in range(epochs):
-        train_loss = 0
-        train_accuracy = 0
+        for epoch in range(epochs):
+            train_loss = 0
 
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+            for batch, x in enumerate(dataloader):
+                if isinstance(x, (list, tuple)): x = x[0]
+                x = x.to(device)
+                # Forward pass
+                normalized_weights = torch.softmax(weights, dim=0)
+                model_outputs = torch.stack([m(x) for m in models])  # (k, batch, features)
+                output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
 
-            # Forward pass
-            normalized_weights = torch.softmax(weights, dim=0)
+                # Calculate loss
+                loss = criterion(output, x)
+                train_loss += loss.item()
 
-            model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+                # Zero grad
+                optimizer.zero_grad()
 
-            output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
+                # Backprog
+                loss.backward()
+
+                # Optimize
+                optimizer.step()
+
+        train_loss = train_loss / len(dataloader)
+        return train_loss, 0.0
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
+        params = [weights]
+        for model in models:
+            params += list(model.parameters())
+        optimizer = torch.optim.Adam(params, lr=lr)
+        k = len(models)
+
+        for epoch in range(epochs):
+            train_loss = 0
+            train_accuracy = 0
+
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
+
+                # Forward pass
+                normalized_weights = torch.softmax(weights, dim=0)
+
+                model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+
+                output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
 
 
-            # Calculate loss
-            loss = criterion(output, y)
-            train_loss += loss.item()
-            train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
+                # Calculate loss
+                loss = criterion(output, y)
+                train_loss += loss.item()
+                train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
 
-            # Zero grad
-            optimizer.zero_grad()
-            
-            # Backprog
-            loss.backward()
+                # Zero grad
+                optimizer.zero_grad()
+                
+                # Backprog
+                loss.backward()
 
-            # Optimize
-            optimizer.step()
+                # Optimize
+                optimizer.step()
 
-    train_loss = train_loss / len(dataloader)
-    train_accuracy = train_accuracy / len(dataloader)
-    
-    return train_loss, train_accuracy
+        train_loss = train_loss / len(dataloader)
+        train_accuracy = train_accuracy / len(dataloader)
+        return train_loss, train_accuracy
 
 
 
 def evaluate(model, dataloader, device=DEVICE):
     model.eval()
-    correct = 0
-    total = 0
+    if isinstance(model, PFL_AutoEncoder):
+        errs = []
+        with torch.no_grad():
+            for x in dataloader:
+                # Handle list/tuple batches from DataLoader
+                if isinstance(x, (list, tuple)):
+                    x = x[0]
+                x = x.to(device)
+                recon = model(x)
+                errs.append(((x - recon) ** 2).mean(dim=1))
+        errs = torch.cat(errs).cpu().numpy()
 
-    with torch.no_grad():
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+        return errs.mean()
+    else:
+        correct = 0
+        total = 0
 
-            # Forward pass
-            output = model(x)
+        with torch.no_grad():
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
 
-            # Compute score
-            _, predicted = torch.max(output, 1)
-            total += y.size(0)
-            correct += (predicted == y).sum().item()
+                # Forward pass
+                output = model(x)
 
-    return correct / total
+                # Compute score
+                _, predicted = torch.max(output, 1)
+                total += y.size(0)
+                correct += (predicted == y).sum().item()
+
+        return correct / total
 
 
 def evaluate_fedmix(models, weights, dataloader, device=DEVICE):
     for model in models:
         model.eval()
 
-    correct = 0
-    total = 0
+    if isinstance(models[0], PFL_AutoEncoder):
+        errs = []
+        with torch.no_grad():
+            for x in dataloader:
+                if isinstance(x, (list, tuple)):
+                    x = x[0]
+                x = x.to(device)
+                normalized_weights = torch.softmax(weights, dim=0)
+                model_outputs = torch.stack([m(x) for m in models])  # (k, batch, features)
+                recon = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
+                errs.append(((x - recon) ** 2).mean(dim=1))
+        errs = torch.cat(errs).cpu().numpy()
 
-    with torch.no_grad():
-        for batch, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            if len(x.shape) == 3:
-                x = x.unsqueeze(1)  # Add channel dimension for MNIST
-            y = y.to(device)
+        return errs.mean()
 
-            # Forward pass
-            normalized_weights = torch.softmax(weights, dim=0)
+    else:
+        correct = 0
+        total = 0
 
-            model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+        with torch.no_grad():
+            for batch, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                y = y.to(device)
 
-            output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
+                # Forward pass
+                normalized_weights = torch.softmax(weights, dim=0)
+
+                model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
+
+                output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
 
 
-            # Compute score
-            _, predicted = torch.max(output, 1)
-            total += y.size(0)
-            correct += (predicted == y).sum().item()
+                # Compute score
+                _, predicted = torch.max(output, 1)
+                total += y.size(0)
+                correct += (predicted == y).sum().item()
 
-    return correct / total
+        return correct / total
