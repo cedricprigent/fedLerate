@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_cfl import CFLServer
 from fedlerate.clients.client_base import BaseClient
 from fedlerate.models.models import load_model
@@ -13,14 +14,24 @@ class IFCAServer(CFLServer):
 
     def assign_clusters(self, selected_clients):
         cluster_assignments = [[] for _ in range(self.config['n_clusters'])]
-        for client in selected_clients:
+        
+        def get_best_cluster(client):
             losses = []
             for cluster in range(self.config['n_clusters']):
                 self.broadcast_model([client], self.models[cluster])
                 loss = client.evaluate()
                 losses.append(loss)
-            best_cluster = np.argmin(losses)
-            cluster_assignments[best_cluster].append(client.client_id)
+            return client.client_id, np.argmin(losses)
+
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                results = list(executor.map(get_best_cluster, selected_clients))
+        else:
+            results = [get_best_cluster(c) for c in selected_clients]
+
+        for client_id, best_cluster in results:
+            cluster_assignments[best_cluster].append(client_id)
 
         return cluster_assignments
 
@@ -46,13 +57,19 @@ class IFCAServer(CFLServer):
 
             # Train each cluster model with its assigned clients
             total_loss = 0
+            n_jobs = self.config.get('n_jobs', 1)
             for cid, cluster in enumerate(cluster_assignments):
                 # Local training
-                updates = []
                 self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
-                for client_id in cluster:
-                    update = self.clients[client_id].train()
-                    updates.append(update)
+                
+                if n_jobs > 1:
+                    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                        updates = list(executor.map(lambda client_id: self.clients[client_id].train(), cluster))
+                else:
+                    updates = []
+                    for client_id in cluster:
+                        update = self.clients[client_id].train()
+                        updates.append(update)
 
                 # Aggregate updates
                 if len(cluster_assignments[cid]) > 0:

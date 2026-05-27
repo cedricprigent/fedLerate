@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_cfl import CFLServer
 from fedlerate.clients.client_fedmix import FedMixClient
 from fedlerate.models.models import load_model
@@ -29,18 +30,29 @@ class FedMixServer(CFLServer):
             self.broadcast_model(selected_clients, self.models)
 
             # Local training for selected clients
-            updates = []
-            for client in selected_clients:
-                update = client.train()
-                updates.append(update)
+            n_jobs = self.config.get('n_jobs', 1)
+            if n_jobs > 1:
+                with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                    updates = list(executor.map(lambda c: c.train(), selected_clients))
+            else:
+                updates = []
+                for client in selected_clients:
+                    update = client.train()
+                    updates.append(update)
 
             # Aggregate updates
             self.aggregate(updates)
 
             total_loss = sum(update['loss'] for update in updates)
 
-            # Evaluate - Broadcast to all clients for global evaluation
-            self.broadcast_model(self.clients, self.models)
+            # Evaluate - To save memory, we broadcast and evaluate one by one
+            # The broadcast_model(self.clients, ...) call stores all models in all clients.
+            # Instead, we'll rely on FedMixClient.evaluate() which now handles device movement.
+            # First, update all clients with the latest global mixture models
+            weights = [model.state_dict() for model in self.models]
+            for client in self.clients:
+                client.set_model_weights(weights)
+            
             accs = self.evaluate()
 
             metrics = {

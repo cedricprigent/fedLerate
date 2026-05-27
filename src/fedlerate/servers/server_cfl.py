@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from fedlerate.servers.server_abc import ServerABC
 from fedlerate.models.models import load_model
@@ -33,10 +34,15 @@ class CFLServer(ServerABC):
     def evaluate(self):
         # Evaluate the global model on the validation set
         self.log.info("Evaluation started")
-        accs = []
-        for client in self.clients:
-            acc = client.evaluate()
-            accs.append(acc)
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                accs = list(executor.map(lambda c: c.evaluate(), self.clients))
+        else:
+            accs = []
+            for client in self.clients:
+                acc = client.evaluate()
+                accs.append(acc)
         return accs
 
     @abstractmethod

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_cfl import CFLServer
 from fedlerate.clients.client_base import BaseClient
 
@@ -24,13 +25,19 @@ class FCFLServer(CFLServer):
 
             # Train each cluster model with its assigned clients
             total_loss = 0
+            n_jobs = self.config.get('n_jobs', 1)
             for cid in range(self.config['n_clusters']):
                 # Local training
-                updates = []
                 self.broadcast_model([self.clients[client_id] for client_id in cluster_assignments[cid]], self.models[cid])
-                for client_id in cluster_assignments[cid]:
-                    update = self.clients[client_id].train()
-                    updates.append(update)
+                
+                if n_jobs > 1:
+                    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                        updates = list(executor.map(lambda client_id: self.clients[client_id].train(), cluster_assignments[cid]))
+                else:
+                    updates = []
+                    for client_id in cluster_assignments[cid]:
+                        update = self.clients[client_id].train()
+                        updates.append(update)
 
                 # Aggregate updates
                 if len(cluster_assignments[cid]) > 0:

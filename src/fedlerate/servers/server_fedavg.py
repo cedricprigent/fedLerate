@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_abc import ServerABC
 from fedlerate.clients.client_base import BaseClient
 from fedlerate.models.models import load_model
@@ -18,9 +19,14 @@ class FedAvgServer(ServerABC):
 
             selected_clients = self.select_clients()
 
-            client_updates = []
-            for client in selected_clients:
-                client_updates.append(client.train())
+            n_jobs = self.config.get('n_jobs', 1)
+            if n_jobs > 1:
+                with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                    client_updates = list(executor.map(lambda c: c.train(), selected_clients))
+            else:
+                client_updates = []
+                for client in selected_clients:
+                    client_updates.append(client.train())
 
             self.aggregate(client_updates)
             self.broadcast_model()
@@ -47,10 +53,14 @@ class FedAvgServer(ServerABC):
 
     def evaluate(self):
         # Evaluation global model on client data
-        accs = []
-        for client in self.clients:
-            acc = client.evaluate()
-            accs.append(acc)
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                accs = list(executor.map(lambda c: c.evaluate(), self.clients))
+        else:
+            accs = []
+            for client in self.clients:
+                accs.append(client.evaluate())
         return accs
 
     def init_clients(self):
