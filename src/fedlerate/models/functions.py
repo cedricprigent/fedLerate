@@ -1,12 +1,57 @@
-from fedlerate.models.models import PFL_AutoEncoder
+import time
+
+from fedlerate.models.models import PFL_AutoEncoder, TransformerEncoder
 import torch
 import torch.nn.functional as F
 import copy
+from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score, accuracy_score
+import numpy as np
 
 
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 
+def spectral_augmentation(x):
+    # Convert to Frequency Domain
+    x_freq = torch.fft.rfft(x)
+    # Randomly zero out high frequencies (noise)
+    mask = torch.rand(x_freq.shape) > 0.1 
+    x_freq = x_freq * mask.to(x_freq.device)
+    # Back to Time Domain
+    return torch.fft.irfft(x_freq, n=x.shape[-1])
+
 def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
+    if isinstance(model, TransformerEncoder):
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        # The Transformer often benefits from a simple CrossEntropyLoss 
+        # if you are using labels, or the Deep SAD loss if unsupervised.
+        criterion = torch.nn.CrossEntropyLoss() 
+        
+        model.train()
+        for epoch in range(epochs):
+            for batch in dataloader:
+                x, y = batch[0].to(device), batch[1].to(device)
+                
+                # 1. Apply Spectral Augmentation
+                x = spectral_augmentation(x)
+                
+                # 2. Forward pass
+                logits = model(x)
+                
+                # Filter out invalid labels (-1) if they somehow persist
+                mask = (y >= 0) & (y < 5)  # Assuming 5 classes
+                logits = logits[mask]
+                y = y[mask]
+                
+                # 3. Loss Calculation
+                # Using CrossEntropy if using labels (Supervised/Semi-supervised)
+                loss = criterion(logits, y)
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        return loss.item(), 0.0
+    
+
     if isinstance(model, PFL_AutoEncoder):
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -326,20 +371,69 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
 
 
 def evaluate(model, dataloader, device=DEVICE):
+    if isinstance(model, TransformerEncoder):
+        model.eval()
+        all_preds = []
+        all_labels = []
+        
+        with torch.no_grad():
+            for batch in dataloader:
+                x, y = batch[0].to(device), batch[1].to(device)
+                
+                # Forward pass
+                logits = model(x)
+                
+                # Get predictions (Logits -> Class)
+                preds = torch.argmax(logits, dim=1)
+                
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(y.cpu().numpy())
+                
+        acc = accuracy_score(all_labels, all_preds)
+        return acc
+
     model.eval()
     if isinstance(model, PFL_AutoEncoder):
         errs = []
+        labels = []
         with torch.no_grad():
-            for x in dataloader:
-                # Handle list/tuple batches from DataLoader
-                if isinstance(x, (list, tuple)):
-                    x = x[0]
+            for batch in dataloader:
+                if isinstance(batch, (list, tuple)):
+                    x, y = batch[0], batch[1]
+                else:
+                    x = batch
+                    y = torch.zeros(x.size(0))
+
                 x = x.to(device)
                 recon = model(x)
-                errs.append(((x - recon) ** 2).mean(dim=1))
-        errs = torch.cat(errs).cpu().numpy()
+                
+                # --- FIX: Ensure 3D shape ---
+                # If x is [Batch, Features], reshape it to [Batch, 1, Features]
+                if x.dim() == 2:
+                    x = x.unsqueeze(1)
+                    recon = recon.unsqueeze(1)
+                
+                # Now the mean calculation over dim (1, 2) is valid
+                batch_errs = ((x - recon) ** 2).mean(dim=(1, 2))
+                
+                errs.append(batch_errs.cpu())
+                labels.append(y.cpu())
 
-        return errs.mean()
+        errs = torch.cat(errs).numpy()
+        threshold = np.percentile(errs, 98)
+        
+        # 1. Convert to numpy array
+        labels = torch.cat(labels).numpy()
+
+        binary_labels = (labels != 0).astype(int)
+        
+        # Now preds is a 1D array of length Batch
+        preds = (errs > threshold).astype(int)
+        
+        f1 = f1_score(binary_labels, preds, zero_division=0.0)
+        # auc = roc_auc_score(labels, errs)
+
+        return f1
     else:
         correct = 0
         total = 0
@@ -362,24 +456,37 @@ def evaluate(model, dataloader, device=DEVICE):
         return correct / total
 
 
-def evaluate_fedmix(models, weights, dataloader, device=DEVICE):
+def evaluate_fedmix(models, weights, dataloader, device=DEVICE, threshold=0.05):
     for model in models:
         model.eval()
 
     if isinstance(models[0], PFL_AutoEncoder):
         errs = []
+        labels = []
         with torch.no_grad():
-            for x in dataloader:
-                if isinstance(x, (list, tuple)):
-                    x = x[0]
+            for batch in dataloader:
+                if isinstance(batch, (list, tuple)):
+                    x, y = batch[0], batch[1]
+                else:
+                    x = batch
+                    y = torch.zeros(x.size(0))
+                
                 x = x.to(device)
                 normalized_weights = torch.softmax(weights, dim=0)
                 model_outputs = torch.stack([m(x) for m in models])  # (k, batch, features)
                 recon = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
                 errs.append(((x - recon) ** 2).mean(dim=1))
-        errs = torch.cat(errs).cpu().numpy()
+                labels.append(y.cpu())
 
-        return errs.mean()
+        errs = torch.cat(errs).cpu().numpy()
+        labels = torch.cat(labels).numpy()
+
+        binary_labels = (labels != 0).astype(int)
+        
+        preds = (errs > threshold).astype(int)
+        f1 = f1_score(binary_labels, preds, zero_division=0.0)
+
+        return f1
 
     else:
         correct = 0

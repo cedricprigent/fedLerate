@@ -138,18 +138,69 @@ class PFL_ResNet18(nn.Module):
         x = self.local_layers(x)
         return x
 
-class Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(256, 128),
+# class Encoder(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.net = nn.Sequential(
+#             nn.Linear(256, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, 32, bias=False), # No bias!
+#             nn.Tanh() # This squashes the output into [-1, 1], keeping it near the origin
+#         )
+
+#     def forward(self, x):
+#         return self.net(x)
+class TransformerEncoder(nn.Module):
+    def __init__(self, beat_len=64, input_channels=1, d_model=128, nhead=4, num_layers=2, num_classes=5):
+        super(TransformerEncoder, self).__init__()
+        self.beat_len = beat_len
+        self.d_model = d_model
+        
+        # 1. Input Projection: Projects signal to latent dimension
+        # Using kernel_size=3 keeps the model sensitive to local waveform features
+        self.embedding = nn.Conv1d(input_channels, d_model, kernel_size=3, padding=1)
+        
+        # 2. Positional Encoding: Learned parameters
+        self.pos_encoder = nn.Parameter(torch.randn(1, d_model, beat_len))
+        
+        # 3. Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, batch_first=True)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        
+        # 4. Final Classification Head
+        # Dynamically calculate the flattened dimension based on beat_len
+        self.flatten_dim = d_model * beat_len
+        self.fc = nn.Sequential(
+            nn.Linear(self.flatten_dim, 64),
             nn.ReLU(),
-            nn.Linear(128, 32)
+            nn.Linear(64, num_classes)
         )
 
     def forward(self, x):
-        return self.net(x)
-
+        # Input x shape: (Batch, Channel, BEAT_LEN) -> (Batch, 1, 64)
+        
+        if x.dim() == 2:
+            x = x.unsqueeze(1) 
+        
+        # Now that it's 3D, we can safely slice if needed
+        # If x has more than 1 channel, take the first one
+        if x.shape[1] > 1:
+            x = x[:, 0:1, :]
+            
+        # Project and add position
+        x = self.embedding(x) + self.pos_encoder 
+        
+        # Transformer expects (Batch, Seq_Len, d_model)
+        x = x.permute(0, 2, 1) 
+        
+        # Pass through Transformer
+        x = self.transformer(x)
+        
+        # Flatten: (Batch, d_model * BEAT_LEN)
+        x = x.reshape(x.size(0), -1)
+        
+        # Classifier
+        return self.fc(x)
 
 class Decoder(nn.Module):
     def __init__(self):
@@ -184,6 +235,17 @@ class PFL_AutoEncoder(nn.Module):
         z = self.global_layers(x)
         return self.local_layers(z)
 
+class DeepSVDD(nn.Module):
+    def __init__(self, encoder, center):
+        super().__init__()
+        self.encoder = encoder
+        # The center is a fixed point in the latent space
+        self.register_buffer("center", center)
+
+    def forward(self, x):
+        return self.encoder(x)
+
+
 def load_model(model_name, device):
 
     if model_name == 'DummyModel':
@@ -211,6 +273,11 @@ def load_model(model_name, device):
         encoder = Encoder().to(device)
         decoder = Decoder().to(device)
         model = PFL_AutoEncoder(encoder, decoder).to(device)
+    elif model_name == 'TransformerEncoder':
+        model = TransformerEncoder().to(device)
+    elif model_name == 'DeepSVDD':
+        encoder = Encoder().to(device)
+        model = DeepSVDD(encoder, torch.zeros(32)).to(device)
     else:
         raise NotImplementedError
 

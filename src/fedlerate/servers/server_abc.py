@@ -35,7 +35,7 @@ class ServerABC(ABC):
 
     def _log_metrics(self, metrics: dict):
         if self.config["model_name"] == "PFL_AutoEncoder":
-            self.log.info(f"Round {metrics['round']} - Avg validation MSE: {'{:.6f}'.format(metrics['accuracy'])} - Avg training loss: {'{:.6f}'.format(metrics['loss'])}")
+            self.log.info(f"Round {metrics['round']} - Avg validation F1: {'{:.6f}'.format(metrics['accuracy'])} - Avg training loss: {'{:.6f}'.format(metrics['loss'])}")
         else:
             self.log.info(f"Avg accuracy: {'{:.3f}'.format(metrics['accuracy'])} - Avg loss: {'{:.3f}'.format(metrics['loss'])}")
 
