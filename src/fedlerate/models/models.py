@@ -151,7 +151,7 @@ class PFL_ResNet18(nn.Module):
 #     def forward(self, x):
 #         return self.net(x)
 class TransformerEncoder(nn.Module):
-    def __init__(self, beat_len=64, input_channels=1, d_model=128, nhead=4, num_layers=2, num_classes=5):
+    def __init__(self, beat_len=256, input_channels=1, d_model=128, nhead=4, num_layers=2, num_classes=2):
         super(TransformerEncoder, self).__init__()
         self.beat_len = beat_len
         self.d_model = d_model

@@ -2,9 +2,11 @@ import time
 
 from fedlerate.models.models import PFL_AutoEncoder, TransformerEncoder
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import copy
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score, accuracy_score
+from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
 
 
@@ -19,12 +21,65 @@ def spectral_augmentation(x):
     # Back to Time Domain
     return torch.fft.irfft(x_freq, n=x.shape[-1])
 
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, inputs, targets):
+        BCE_loss = nn.functional.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+        return F_loss.mean()
+    
+
+def get_client_loss_function(y_train, num_classes=5):
+    # Compute weights based on this client's specific labels
+    if isinstance(y_train, torch.Tensor):
+        labels_np = y_train.cpu().detach().numpy().flatten()
+    elif isinstance(y_train, list):
+        # Flatten if it's a list of lists or mixed types
+        labels_np = np.array(y_train).flatten()
+    else:
+        labels_np = np.array(y_train).flatten()
+    
+    # Filter labels to only include those within [0, num_classes)
+    mask = (labels_np >= 0) & (labels_np < num_classes)
+    labels_np = labels_np[mask]
+    
+    if len(labels_np) == 0:
+        return nn.CrossEntropyLoss()
+
+    classes_present = np.unique(labels_np)
+    weights_present = compute_class_weight(
+        class_weight='balanced', 
+        classes=classes_present, 
+        y=labels_np
+    )
+    weights_present = np.array([0.272, 0.728])
+    
+    # Initialize weights with 1.0 for all classes
+    full_weights = np.ones(num_classes, dtype=np.float32)
+    for cls, w in zip(classes_present, weights_present):
+        full_weights[cls] = w
+        
+    # Convert to tensor and move to device
+    class_weights = torch.tensor(full_weights, dtype=torch.float32).to(DEVICE)
+    return nn.CrossEntropyLoss(weight=class_weights)
+
+
 def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
     if isinstance(model, TransformerEncoder):
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         # The Transformer often benefits from a simple CrossEntropyLoss 
         # if you are using labels, or the Deep SAD loss if unsupervised.
-        criterion = torch.nn.CrossEntropyLoss() 
+        # if hasattr(dataloader.dataset, 'tensors'):
+        #     criterion = get_client_loss_function(dataloader.dataset.tensors[1], num_classes=2)
+        # else:
+        #     criterion = get_client_loss_function(dataloader.dataset.targets, num_classes=2)
+
+        criterion = FocalLoss(alpha=0.25, gamma=0.5)
         
         model.train()
         for epoch in range(epochs):
