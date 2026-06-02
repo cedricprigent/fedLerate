@@ -3,6 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from torchvision.models import resnet18, ResNet18_Weights
+import torchaudio.transforms as T
 
 
 class LeNet5(nn.Module):
@@ -202,6 +203,55 @@ class TransformerEncoder(nn.Module):
         # Classifier
         return self.fc(x)
 
+
+class DS_CNNBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=3, 
+                                   stride=stride, padding=1, groups=in_channels, bias=False)
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+        x = self.bn(x)
+        return self.relu(x)
+
+class DSCNN(nn.Module):
+    def __init__(self, num_classes=4):
+        super().__init__()
+        # Input: (Batch, 1, Frequency_Bins, Time_Frames) - e.g., 40x40
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
+        self.blocks = nn.Sequential(
+            DS_CNNBlock(64, 64),
+            DS_CNNBlock(64, 64, stride=2),
+            DS_CNNBlock(64, 128)
+        )
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(128, num_classes)
+
+        self.transform = T.MelSpectrogram(
+            sample_rate=16000, 
+            n_mels=64,    # Height of your "image"
+            n_fft=1024, 
+            hop_length=512
+        )
+
+    def forward(self, x):
+        x = self.transform(x)
+        x = x.unsqueeze(1)
+        x = self.stem(x)
+        x = self.blocks(x)
+        x = self.pool(x).flatten(1)
+        return self.fc(x)
+    
+
 class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -278,6 +328,8 @@ def load_model(model_name, device):
     elif model_name == 'DeepSVDD':
         encoder = Encoder().to(device)
         model = DeepSVDD(encoder, torch.zeros(32)).to(device)
+    elif model_name == 'DSCNN':
+        model = DSCNN().to(device)
     else:
         raise NotImplementedError
 

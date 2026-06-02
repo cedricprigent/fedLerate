@@ -5,6 +5,7 @@ from fedlerate.datasets.mnist_partitions import generate_mnist_partitions
 from fedlerate.datasets.digits_drift_partitions import create_digits_drift_partitions
 from fedlerate.datasets.pacs_soft_partitions import generate_pacs_soft_partitions
 from fedlerate.datasets.pacs_strict_partitions import generate_pacs_strict_partitions
+from fedlerate.datasets.speech_commands import generate_speech_commands_partitions
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -39,6 +40,13 @@ def build_parser():
         help="Set random seed for generation"
     )
 
+    parser.add_argument(
+        "--root",
+        type=str,
+        default='~/datasets',
+        help="Root directory for the dataset"
+    )
+
     return parser
 
 def main():
@@ -56,7 +64,7 @@ def main():
     dataset = args.dataset
     alpha = args.alpha
     clients = args.clients
-
+    root = args.root
     random.seed(args.seed)
     
     if dataset == "MNIST":
@@ -67,6 +75,8 @@ def main():
         generate_pacs_soft_partitions()
     elif dataset == "PACS-strict":
         generate_pacs_strict_partitions(alpha=alpha, n_partitions_per_domain=clients//4)
+    elif dataset == "SpeechCommands":
+        generate_speech_commands_partitions(alpha=alpha, n_clients=clients, root=root)
 
 if __name__ == "__main__":
     main()

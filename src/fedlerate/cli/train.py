@@ -54,7 +54,7 @@ def main(config):
         fedprox_mu=config.fedprox_mu,
         ditto_lambda=config.ditto_lambda,
         n_clusters=config.n_clusters,
-        n_jobs=config.n_jobs,
+        n_jobs=1,
     )
 
     # Run experiment
