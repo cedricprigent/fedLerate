@@ -210,7 +210,7 @@ class DS_CNNBlock(nn.Module):
         self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=3, 
                                    stride=stride, padding=1, groups=in_channels, bias=False)
         self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.bn = nn.GroupNorm(num_groups=8, num_channels=out_channels)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
@@ -225,7 +225,7 @@ class DSCNN(nn.Module):
         # Input: (Batch, 1, Frequency_Bins, Time_Frames) - e.g., 40x40
         self.stem = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.GroupNorm(num_groups=8, num_channels=64),
             nn.ReLU(inplace=True)
         )
         self.blocks = nn.Sequential(
@@ -245,6 +245,7 @@ class DSCNN(nn.Module):
 
     def forward(self, x):
         x = self.transform(x)
+        x = T.AmplitudeToDB(top_db=80)(x)
         x = x.unsqueeze(1)
         x = self.stem(x)
         x = self.blocks(x)
