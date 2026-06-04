@@ -222,7 +222,8 @@ class DS_CNNBlock(nn.Module):
 class DSCNN(nn.Module):
     def __init__(self, num_classes=4):
         super().__init__()
-        # Input: (Batch, 1, Frequency_Bins, Time_Frames) - e.g., 40x40
+        
+        # --- Global Layers (Feature Extractor) ---
         self.stem = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False),
             nn.GroupNorm(num_groups=8, num_channels=64),
@@ -234,23 +235,36 @@ class DSCNN(nn.Module):
             DS_CNNBlock(64, 128)
         )
         self.pool = nn.AdaptiveAvgPool2d(1)
+
+        # --- Local Layers (Personalized Head) ---
         self.fc = nn.Linear(128, num_classes)
 
-        self.transform = T.MelSpectrogram(
-            sample_rate=16000, 
-            n_mels=64,    # Height of your "image"
-            n_fft=1024, 
-            hop_length=512
-        )
+        # Define attributes for FedPer
+        self.global_layers = nn.ModuleDict({
+            'stem': self.stem,
+            'blocks': self.blocks,
+            'pool': self.pool
+        })
+        self.local_layers = nn.ModuleDict({
+            'dropout': nn.Dropout(0.3),
+            'fc': self.fc
+        })
+
+        self.transform = T.MelSpectrogram(sample_rate=16000, n_mels=64, n_fft=1024, hop_length=512)
 
     def forward(self, x):
         x = self.transform(x)
         x = T.AmplitudeToDB(top_db=80)(x)
         x = x.unsqueeze(1)
-        x = self.stem(x)
-        x = self.blocks(x)
-        x = self.pool(x).flatten(1)
-        return self.fc(x)
+        
+        # Pass through global layers
+        x = self.global_layers['stem'](x)
+        x = self.global_layers['blocks'](x)
+        x = self.global_layers['pool'](x).flatten(1)
+        
+        # Pass through local layers
+        x = self.local_layers['dropout'](x)
+        return self.local_layers['fc'](x)
     
 
 class Decoder(nn.Module):

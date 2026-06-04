@@ -7,4 +7,4 @@ class DittoServer(FedAvgServer):
 
     def init_clients(self):
         # Initialize clients based on the configuration
-        self.clients = [DittoClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(DittoClient)

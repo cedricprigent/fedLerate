@@ -17,7 +17,7 @@ class FedAvgServer(ServerABC):
         for rnd in range(self.config['n_rounds']):
             self.log.info(f"### Round {rnd} ###")
 
-            selected_clients = self.select_clients()
+            selected_clients = self.select_clients(rnd)
 
             n_jobs = self.config.get('n_jobs', 1)
             if n_jobs > 1:
@@ -31,17 +31,23 @@ class FedAvgServer(ServerABC):
             self.aggregate(client_updates)
             self.broadcast_model()
 
-            accs = self.evaluate()
+            if (rnd + 1) % self.config.get('eval_every', 1) == 0 or (rnd + 1) == self.config['n_rounds']:
+                accs = self.evaluate()
+                accuracy = sum(accs) / len(accs)
+            else:
+                accuracy = None
 
             metrics = {
                 "round": rnd,
                 "strategy": self.strategy,
                 "model_name": self.config['model_name'],
-                "accuracy": sum(accs) / len(accs),
+                "accuracy": accuracy,
                 "loss": sum(update['loss'] for update in client_updates) / len(client_updates)
             }
             self._save_metrics(metrics, self.config['metrics_save_path'])
             self._log_metrics(metrics)
+
+        return self.global_model
 
     def aggregate(self, client_updates):
         # FedAvg aggregation logic
@@ -65,13 +71,16 @@ class FedAvgServer(ServerABC):
 
     def init_clients(self):
         # Initialize clients based on the configuration
-        self.clients = [BaseClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(BaseClient)
 
-    def select_clients(self):
+    def select_clients(self, rnd):
         # Client selection logic (e.g., random selection)
         n_clients = len(self.clients)
         if n_clients < self.config['n_clients_per_round']:
             return self.clients
+        
+        # Set seed based on global seed and round for reproducibility
+        np.random.seed(self.config['seed'] + rnd)
         indices = np.random.choice(n_clients, self.config['n_clients_per_round'], replace=False)
         return [self.clients[i] for i in indices]
 
@@ -80,8 +89,7 @@ class FedAvgServer(ServerABC):
 
     def broadcast_model(self):
         # Broadcast the global model to all clients
-        for client in self.clients:
-            client.set_model_weights(self.global_model.state_dict())
+        self._broadcast_parallel(self.clients, self.global_model.state_dict())
 
     def run(self):
         self.train()

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import logging
 import csv
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 
@@ -16,6 +17,23 @@ class ServerABC(ABC):
 
         logging.basicConfig(level=logging.INFO)
         self.log = logging.getLogger(self.__class__.__module__)
+
+    def _init_clients_parallel(self, client_class):
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                return list(executor.map(lambda i: client_class(client_id=i, config=self.config, device=self.device), range(self.config['n_clients'])))
+        else:
+            return [client_class(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+
+    def _broadcast_parallel(self, clients, weights):
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                list(executor.map(lambda c: c.set_model_weights(weights), clients))
+        else:
+            for client in clients:
+                client.set_model_weights(weights)
 
     def _save_metrics(self, metrics: dict, file_path: str):
         # Check if file exists to decide whether to write header
@@ -34,10 +52,13 @@ class ServerABC(ABC):
             writer.writerow(metrics)
 
     def _log_metrics(self, metrics: dict):
+        accuracy_str = '{:.3f}'.format(metrics['accuracy']) if metrics['accuracy'] is not None else "N/A"
+        loss_str = '{:.3f}'.format(metrics['loss']) if metrics['loss'] is not None else "N/A"
+
         if self.config["model_name"] == "PFL_AutoEncoder":
-            self.log.info(f"Round {metrics['round']} - Avg validation F1: {'{:.6f}'.format(metrics['accuracy'])} - Avg training loss: {'{:.6f}'.format(metrics['loss'])}")
+            self.log.info(f"Round {metrics['round']} - Avg validation F1: {accuracy_str} - Avg training loss: {loss_str}")
         else:
-            self.log.info(f"Avg accuracy: {'{:.3f}'.format(metrics['accuracy'])} - Avg loss: {'{:.3f}'.format(metrics['loss'])}")
+            self.log.info(f"Avg accuracy: {accuracy_str} - Avg loss: {loss_str}")
 
     @abstractmethod
     def train(self):

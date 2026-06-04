@@ -10,12 +10,11 @@ class FedMixServer(CFLServer):
         super(FedMixServer, self).__init__(config)
 
     def init_clients(self):
-        self.clients = [FedMixClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(FedMixClient)
         
     def broadcast_model(self, clients, models):
         weights = [model.state_dict() for model in models]
-        for client in clients:
-            client.set_model_weights(weights)
+        self._broadcast_parallel(clients, weights)
 
     def train(self):
         # Main training loop
@@ -48,18 +47,21 @@ class FedMixServer(CFLServer):
             # Evaluate - To save memory, we broadcast and evaluate one by one
             # The broadcast_model(self.clients, ...) call stores all models in all clients.
             # Instead, we'll rely on FedMixClient.evaluate() which now handles device movement.
-            # First, update all clients with the latest global mixture models
-            weights = [model.state_dict() for model in self.models]
-            for client in self.clients:
-                client.set_model_weights(weights)
-            
-            accs = self.evaluate()
+            if (rnd + 1) % self.config.get('eval_every', 1) == 0 or (rnd + 1) == self.config['n_rounds']:
+                # First, update all clients with the latest global mixture models
+                weights = [model.state_dict() for model in self.models]
+                self._broadcast_parallel(self.clients, weights)
+                
+                accs = self.evaluate()
+                accuracy = sum(accs) / len(accs)
+            else:
+                accuracy = None
 
             metrics = {
                 "round": rnd,
                 "strategy": self.strategy,
                 "model_name": self.config['model_name'],
-                "accuracy": sum(accs) / len(accs),
+                "accuracy": accuracy,
                 "loss": total_loss / len(selected_clients)
             }
             self._save_metrics(metrics, self.config['metrics_save_path'])

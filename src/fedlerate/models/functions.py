@@ -156,6 +156,10 @@ def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
                 # Forward pass
                 output = model(x)
 
+                # Ensure y is within bounds [0, output.size(1)-1]
+                if torch.any((y < 0) | (y >= output.size(1))):
+                     raise ValueError(f"Label out of bounds: min={y.min()}, max={y.max()}, num_classes={output.size(1)}")
+
                 # Calculate loss
                 loss = criterion(output, y)
                 train_loss += loss.item()

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_cfl import CFLServer
 from fedlerate.clients.client_base import BaseClient
 from fedlerate.models.models import load_model
@@ -9,7 +10,7 @@ class IFCAServer(CFLServer):
         super(IFCAServer, self).__init__(config)
 
     def init_clients(self):
-        self.clients = [BaseClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(BaseClient)
 
     def assign_clusters(self, selected_clients):
         cluster_assignments = [[] for _ in range(self.config['n_clusters'])]
@@ -22,7 +23,12 @@ class IFCAServer(CFLServer):
                 losses.append(loss)
             return client.client_id, np.argmin(losses)
 
-        results = [get_best_cluster(c) for c in selected_clients]
+        n_jobs = self.config.get('n_jobs', 1)
+        if n_jobs > 1:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                results = list(executor.map(get_best_cluster, selected_clients))
+        else:
+            results = [get_best_cluster(c) for c in selected_clients]
 
         for client_id, best_cluster in results:
             cluster_assignments[best_cluster].append(client_id)
@@ -49,6 +55,7 @@ class IFCAServer(CFLServer):
                     self.models[cid].load_state_dict(self.models[0].state_dict())
 
                 # Random assignment
+                np.random.seed(self.config['seed'] + rnd)
                 cids = np.arange(0, len(self.clients))
                 np.random.shuffle(cids)
                 clusters = np.array_split(cids, self.config['n_clusters'])
@@ -64,10 +71,14 @@ class IFCAServer(CFLServer):
                 # Local training
                 self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
                 
-                updates = []
-                for client_id in cluster:
-                    update = self.clients[client_id].train()
-                    updates.append(update)
+                if n_jobs > 1:
+                    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                        updates = list(executor.map(lambda client_id: self.clients[client_id].train(), cluster))
+                else:
+                    updates = []
+                    for client_id in cluster:
+                        update = self.clients[client_id].train()
+                        updates.append(update)
 
                 # Aggregate updates
                 if len(cluster_assignments[cid]) > 0:
@@ -76,16 +87,20 @@ class IFCAServer(CFLServer):
                 total_loss += sum(update['loss'] for update in updates)
 
             # Evaluate cluster models
-            for cid, cluster in enumerate(cluster_assignments):
-                self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
+            if (rnd + 1) % self.config.get('eval_every', 1) == 0 or (rnd + 1) == self.config['n_rounds']:
+                for cid, cluster in enumerate(cluster_assignments):
+                    self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
 
-            accs = self.evaluate()
+                accs = self.evaluate()
+                accuracy = sum(accs) / len(accs)
+            else:
+                accuracy = None
 
             metrics = {
                 "round": rnd,
                 "strategy": self.strategy,
                 "model_name": self.config['model_name'],
-                "accuracy": sum(accs) / len(accs),
+                "accuracy": accuracy,
                 "loss": total_loss / len(selected_clients)
             }
             self._save_metrics(metrics, self.config['metrics_save_path'])

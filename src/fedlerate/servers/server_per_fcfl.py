@@ -8,7 +8,7 @@ class PerFCFLServer(FCFLServer):
         super(PerFCFLServer, self).__init__(config)
 
     def init_clients(self):
-        self.clients = [PFLClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(PFLClient)
 
     def init_model(self) -> None:
         self.models = [load_model(self.config['model_name'], device='cpu').global_layers for _ in range(self.config['n_clusters'])]

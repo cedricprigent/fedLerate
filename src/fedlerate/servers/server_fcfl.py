@@ -46,20 +46,24 @@ class FCFLServer(CFLServer):
                 total_loss += sum(update['loss'] for update in updates)
 
             # Evaluate cluster models
-            for cid, cluster in enumerate(cluster_assignments):
-                self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
+            if (rnd + 1) % self.config.get('eval_every', 1) == 0 or (rnd + 1) == self.config['n_rounds']:
+                for cid, cluster in enumerate(cluster_assignments):
+                    self.broadcast_model([self.clients[client_id] for client_id in cluster], self.models[cid])
 
-            accs = self.evaluate()
+                accs = self.evaluate()
+                accuracy = sum(accs) / len(accs)
+            else:
+                accuracy = None
 
             metrics = {
                 "round": rnd,
                 "strategy": self.strategy,
                 "model_name": self.config['model_name'],
-                "accuracy": sum(accs) / len(accs),
+                "accuracy": accuracy,
                 "loss": total_loss / len(selected_clients)
             }
             self._save_metrics(metrics, self.config['metrics_save_path'])
             self._log_metrics(metrics)
 
     def init_clients(self):
-        self.clients = [BaseClient(client_id=i, config=self.config, device=self.device) for i in range(self.config['n_clients'])]
+        self.clients = self._init_clients_parallel(BaseClient)

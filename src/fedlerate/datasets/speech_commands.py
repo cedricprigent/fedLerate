@@ -7,6 +7,14 @@ from torch.utils.data import Dataset, TensorDataset
 ALLOWED_CLASSES = ['yes', 'no', 'up', 'down']
 class_to_idx = {cls: i for i, cls in enumerate(sorted(ALLOWED_CLASSES))}
 
+def normalize_waveform(waveform):
+    # Scale to [-1, 1] range (Standard for audio)
+    # This is critical because the original files vary in volume.
+    max_val = torch.max(torch.abs(waveform))
+    if max_val > 0:
+        waveform = waveform / max_val
+    return waveform
+
 def load_sample(path, class_to_idx):
     waveform, sample_rate = torchaudio.load(path)
     label = os.path.basename(os.path.dirname(path))
@@ -16,8 +24,9 @@ def load_sample(path, class_to_idx):
         waveform = waveform[:, :16000]
     elif waveform.size(1) < 16000:
         waveform = torch.nn.functional.pad(waveform, (0, 16000 - waveform.size(1)))
-    
-    return waveform.squeeze(0), class_to_idx[label]
+
+    waveform = normalize_waveform(waveform.squeeze(0))
+    return waveform, class_to_idx[label]
 
 def generate_speech_commands_partitions(alpha, n_clients, root='~/datasets'):
     """
@@ -57,7 +66,7 @@ def generate_speech_commands_partitions(alpha, n_clients, root='~/datasets'):
     
     # 4. Filter and sort speakers
     # We want speakers with enough samples to split into train/test
-    MIN_SAMPLES = 15
+    MIN_SAMPLES = 17
     valid_speakers = sorted([sid for sid, files in speaker_to_files.items() if len(files) >= MIN_SAMPLES])
     
     if len(valid_speakers) < n_clients:

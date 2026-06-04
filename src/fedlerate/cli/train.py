@@ -29,16 +29,24 @@ def main(config):
 
     OmegaConf.set_struct(config, False)
     
-    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "n_jobs"]
+    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "n_jobs", "eval_every", "seed"]
     for k in strategy_keys:
         if k not in config:
             config[k] = None
-    
+
     # Ensure n_jobs is at least 1 and not None
     if config.n_jobs is None:
         config.n_jobs = 1
-    
-    print(f'### Starting {strategy} on {dataset} with n_jobs={config.n_jobs} ###')
+
+    # Evaluation defaults
+    if config.eval_every is None:
+        config.eval_every = 1
+
+    # Seed defaults
+    if config.seed is None:
+        config.seed = 42
+
+    print(f'### Starting {strategy} on {dataset} with n_jobs={config.n_jobs} and seed={config.seed} ###')
 
     # Base parameters
     d = dict(
@@ -54,9 +62,10 @@ def main(config):
         fedprox_mu=config.fedprox_mu,
         ditto_lambda=config.ditto_lambda,
         n_clusters=config.n_clusters,
-        n_jobs=1,
+        n_jobs=config.n_jobs,
+        eval_every=config.eval_every,
+        seed=config.seed,
     )
-
     # Run experiment
     if strategy == 'FedAvg':
         server = FedAvgServer(d)
