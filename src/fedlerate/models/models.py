@@ -209,60 +209,64 @@ class DS_CNNBlock(nn.Module):
         super().__init__()
         self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size=3, 
                                    stride=stride, padding=1, groups=in_channels, bias=False)
+        self.bn1 = nn.GroupNorm(num_groups=8, num_channels=in_channels)
         self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self.bn = nn.GroupNorm(num_groups=8, num_channels=out_channels)
+        self.bn2 = nn.GroupNorm(num_groups=8, num_channels=out_channels)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        x = self.bn(x)
-        return self.relu(x)
+        x = self.relu(self.bn1(self.depthwise(x)))
+        x = self.relu(self.bn2(self.pointwise(x)))
+        return x
 
 class DSCNN(nn.Module):
-    def __init__(self, num_classes=4):
+    def __init__(self, num_classes=10):
         super().__init__()
         
-        # --- Global Layers (Feature Extractor) ---
+        self.transform = T.MelSpectrogram(sample_rate=16000, n_mels=64, n_fft=1024, hop_length=512)
+        self.to_db = T.AmplitudeToDB(top_db=80)
+
+        # --- Global Layers (Backbone) ---
         self.stem = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False),
             nn.GroupNorm(num_groups=8, num_channels=64),
             nn.ReLU(inplace=True)
         )
         self.blocks = nn.Sequential(
             DS_CNNBlock(64, 64),
             DS_CNNBlock(64, 64, stride=2),
-            DS_CNNBlock(64, 128)
+            DS_CNNBlock(64, 128),
+            DS_CNNBlock(128, 128)
         )
         self.pool = nn.AdaptiveAvgPool2d(1)
 
-        # --- Local Layers (Personalized Head) ---
-        self.fc = nn.Linear(128, num_classes)
-
-        # Define attributes for FedPer
+        # Wrap in ModuleDict for easy state_dict filtering
         self.global_layers = nn.ModuleDict({
             'stem': self.stem,
             'blocks': self.blocks,
             'pool': self.pool
         })
+
+        # --- Local Layers (Personalized Head) ---
         self.local_layers = nn.ModuleDict({
             'dropout': nn.Dropout(0.3),
-            'fc': self.fc
+            'fc': nn.Linear(128, num_classes)
         })
 
-        self.transform = T.MelSpectrogram(sample_rate=16000, n_mels=64, n_fft=1024, hop_length=512)
-
     def forward(self, x):
+        # Normalization for consistent input
+        x = x / (x.abs().max(dim=-1, keepdim=True)[0] + 1e-6)
         x = self.transform(x)
-        x = T.AmplitudeToDB(top_db=80)(x)
-        x = x.unsqueeze(1)
+        x = self.to_db(x)
+        x = (x - x.mean(dim=(1, 2), keepdim=True)) / (x.std(dim=(1, 2), keepdim=True) + 1e-6)
         
-        # Pass through global layers
+        # Pass through global backbone
+        x = x.unsqueeze(1)
         x = self.global_layers['stem'](x)
         x = self.global_layers['blocks'](x)
         x = self.global_layers['pool'](x).flatten(1)
         
-        # Pass through local layers
+        # Pass through local head
         x = self.local_layers['dropout'](x)
         return self.local_layers['fc'](x)
     

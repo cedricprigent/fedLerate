@@ -4,7 +4,7 @@ import torch
 import torchaudio
 from torch.utils.data import Dataset, TensorDataset
 
-ALLOWED_CLASSES = ['yes', 'no', 'up', 'down']
+ALLOWED_CLASSES = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go']
 class_to_idx = {cls: i for i, cls in enumerate(sorted(ALLOWED_CLASSES))}
 
 def normalize_waveform(waveform):
@@ -66,7 +66,7 @@ def generate_speech_commands_partitions(alpha, n_clients, root='~/datasets'):
     
     # 4. Filter and sort speakers
     # We want speakers with enough samples to split into train/test
-    MIN_SAMPLES = 17
+    MIN_SAMPLES = 30
     valid_speakers = sorted([sid for sid, files in speaker_to_files.items() if len(files) >= MIN_SAMPLES])
     
     if len(valid_speakers) < n_clients:
