@@ -10,13 +10,6 @@ class DittoClient(BaseClient):
     def train(self):
         # Train local model on client data
         # Return model update and data size for aggregation
-        loss, _ = train(self.model, 
-            dataloader=self.trainloader, 
-            epochs=self.config['local_epochs'], 
-            lr=self.config['local_lr'],
-            device=self.device
-        )
-
         loss, _ = train_ditto(
             personalized_model=self.personalized_model, 
             global_model=self.model, 
@@ -24,8 +17,19 @@ class DittoClient(BaseClient):
             epochs=self.config['local_epochs'], 
             lr=self.config['local_lr'],
             lambda_=self.config['ditto_lambda'],
+            device=self.device,
+            noise_mixer=self.noise_mixer
+        )
+        
+        loss, _ = train(self.model, 
+            dataloader=self.trainloader, 
+            epochs=self.config['local_epochs'], 
+            lr=self.config['local_lr'],
             device=self.device
         )
+
+
+        self.config['local_lr'] *= self.config.get('lr_decay', 1.0)
 
         return {
             "weights": self.get_model_weights(),

@@ -14,8 +14,11 @@ class FedProxClient(BaseClient):
             epochs=self.config['local_epochs'], 
             device=self.device,
             mu=self.config['fedprox_mu'],
-            lr=self.config['local_lr']
+            lr=self.config['local_lr'],
+            noise_mixer=self.noise_mixer
         )
+
+        self.config['local_lr'] *= self.config.get('lr_decay', 1.0)
 
         return {
             "weights": self.get_model_weights(),

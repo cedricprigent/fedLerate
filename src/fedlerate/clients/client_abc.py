@@ -6,6 +6,10 @@ class ClientABC(ABC):
         self.client_id = client_id
         self.config = config        
         self.device = device
+        if self.config.get('use_noise_mixer', False):
+            self.load_noise_mixer()
+        else:
+            self.noise_mixer = None
 
     def set_model_weights(self, weights):
         if self.model is not None:
@@ -32,3 +36,8 @@ class ClientABC(ABC):
     @abstractmethod
     def init_data(self):
         pass
+
+    def load_noise_mixer(self):
+        from fedlerate.models.functions import get_background_noise_list, BackgroundNoiseMixer
+        noise_list = get_background_noise_list()
+        self.noise_mixer = BackgroundNoiseMixer(noise_list)

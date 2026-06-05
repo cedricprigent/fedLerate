@@ -23,8 +23,11 @@ class FedMixClient(ClientABC):
             dataloader=self.trainloader, 
             epochs=self.config['local_epochs'], 
             lr=self.config['local_lr'],
-            device=self.device
+            device=self.device,
+            noise_mixer=self.noise_mixer
         )
+
+        self.config['local_lr'] *= self.config.get('lr_decay', 1.0)
 
         weights = self.get_model_weights()
 

@@ -8,9 +8,75 @@ import copy
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score, accuracy_score
 from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
+import random
+import os
+import torchaudio
 
 
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
+
+
+def get_background_noise_list(root='~/datasets', sample_rate=16000):
+    root = os.path.expanduser(root)
+    # The noise files are in the _background_noise_ folder
+    noise_path = os.path.join(root, 'SpeechCommands/speech_commands_v0.02/_background_noise_')
+    
+    noise_list = []
+    
+    # Supported audio formats
+    valid_extensions = ('.wav', '.mp3')
+    
+    if not os.path.exists(noise_path):
+        print(f"Warning: Background noise folder not found at {noise_path}")
+        return []
+
+    for filename in os.listdir(noise_path):
+        if filename.endswith(valid_extensions):
+            file_path = os.path.join(noise_path, filename)
+            # Load waveform
+            waveform, sr = torchaudio.load(file_path)
+            
+            # Resample if necessary to match your model's requirement
+            if sr != sample_rate:
+                resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=sample_rate)
+                waveform = resampler(waveform)
+                
+            noise_list.append(waveform)
+
+    return noise_list
+
+
+class BackgroundNoiseMixer:
+    def __init__(self, noise_dataset, snr_range=(5, 15)):
+        """
+        noise_dataset: list of waveforms (tensors)
+        snr_range: range of Signal-to-Noise Ratio (dB)
+        """
+        self.noise_dataset = noise_dataset
+        self.snr_range = snr_range
+
+    def __call__(self, waveform):
+        # 1. Randomly pick a noise sample
+        noise = random.choice(self.noise_dataset)
+        
+        # 2. Extract a random snippet of the same length as the waveform
+        start = random.randint(0, noise.size(1) - waveform.size(1))
+        snippet = noise[:, start : start + waveform.size(1)]
+        
+        # 3. Mix with random SNR
+        snr = random.uniform(*self.snr_range)
+        
+        # Calculate powers
+        waveform_power = waveform.pow(2).mean()
+        noise_power = snippet.pow(2).mean()
+        
+        # Scale noise to match SNR
+        scale = (waveform_power / (noise_power * (10**(snr / 10)))).sqrt()
+        
+        # Add to original and normalize back
+        mixed = waveform + (snippet * scale)
+        return mixed / mixed.abs().max()
+
 
 def spectral_augmentation(x):
     # Convert to Frequency Domain
@@ -69,7 +135,7 @@ def get_client_loss_function(y_train, num_classes=5):
     return nn.CrossEntropyLoss(weight=class_weights)
 
 
-def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
+def train(model, dataloader, epochs, lr=3e-4, device=DEVICE, noise_mixer=None):
     if isinstance(model, TransformerEncoder):
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         # The Transformer often benefits from a simple CrossEntropyLoss 
@@ -148,9 +214,14 @@ def train(model, dataloader, epochs, lr=3e-4, device=DEVICE):
             train_accuracy = 0
 
             for batch, (x, y) in enumerate(dataloader):
-                x = x.to(device)
+                if noise_mixer is not None:
+                    if random.random() < 0.52:  # 50% chance to apply noise augmentation
+                        x = noise_mixer(x)  # Apply background noise augmentation
+
                 if len(x.shape) == 3:
                     x = x.unsqueeze(1)  # Add channel dimension for MNIST
+
+                x = x.to(device)
                 y = y.to(device)
 
                 # Forward pass
@@ -195,7 +266,7 @@ def accuracy_fn(y_true, y_pred):
     return acc
 
 
-def train_fedprox(model, dataloader, epochs, mu=0.01, lr=3e-4, device=DEVICE):
+def train_fedprox(model, dataloader, epochs, mu=0.01, lr=3e-4, device=DEVICE, noise_mixer=None):
     if isinstance(model, PFL_AutoEncoder):
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -239,9 +310,14 @@ def train_fedprox(model, dataloader, epochs, mu=0.01, lr=3e-4, device=DEVICE):
             train_accuracy = 0
 
             for batch, (x, y) in enumerate(dataloader):
-                x = x.to(device)
+                if noise_mixer is not None:
+                    if random.random() < 0.52:  # 50% chance to apply noise augmentation
+                        x = noise_mixer(x)  # Apply background noise augmentation
+
                 if len(x.shape) == 3:
                     x = x.unsqueeze(1)  # Add channel dimension for MNIST
+
+                x = x.to(device)
                 y = y.to(device)
 
                 # Forward pass
@@ -274,7 +350,7 @@ def proximal_term(model, global_model, mu):
     return (mu / 2) * proximal_term
 
 
-def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, lambda_=0.5, device=DEVICE):
+def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, lambda_=0.5, device=DEVICE, noise_mixer=None):
     if isinstance(personalized_model, PFL_AutoEncoder):
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(personalized_model.parameters(), lr=lr)
@@ -319,9 +395,14 @@ def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, l
             train_accuracy = 0
 
             for batch, (x, y) in enumerate(dataloader):
-                x = x.to(device)
+                if noise_mixer is not None:
+                    if random.random() < 0.52:  # 50% chance to apply noise augmentation
+                        x = noise_mixer(x)  # Apply background noise augmentation
+
                 if len(x.shape) == 3:
                     x = x.unsqueeze(1)  # Add channel dimension for MNIST
+
+                x = x.to(device)
                 y = y.to(device)
 
                 # Forward pass
@@ -349,7 +430,7 @@ def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, l
         return train_loss, train_accuracy
 
 
-def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
+def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE, noise_mixer=None):
     if isinstance(models[0], PFL_AutoEncoder):
         criterion = torch.nn.MSELoss()
         params = [weights]
@@ -396,9 +477,14 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE):
             train_accuracy = 0
 
             for batch, (x, y) in enumerate(dataloader):
-                x = x.to(device)
+                if noise_mixer is not None:
+                    if random.random() < 0.52:  # 50% chance to apply noise augmentation
+                        x = noise_mixer(x)  # Apply background noise augmentation
+
                 if len(x.shape) == 3:
                     x = x.unsqueeze(1)  # Add channel dimension for MNIST
+
+                x = x.to(device)
                 y = y.to(device)
 
                 # Forward pass
