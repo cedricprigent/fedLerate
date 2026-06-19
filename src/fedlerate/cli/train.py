@@ -12,6 +12,7 @@ import hydra
 from pathlib import Path
 import numpy as np
 import json
+import os
 
 from omegaconf import OmegaConf
 
@@ -86,32 +87,28 @@ def main(config):
         server = PerIFCAServer(d)
         server.run()
     if strategy in ['FCFL', 'PerFCFL']:
-        # Hydra changes the CWD to the run directory. 
-        # We need to look 4 levels up to reach the MPC project root.
-        root_prefix = Path('../../../../')
-        
         # Check for best_k_path in config
         if 'best_k_path' in config and config.best_k_path:
-            best_k_path = root_prefix / config.best_k_path
+            best_k_path = Path(os.path.expanduser(config.best_k_path))
             if best_k_path.exists():
                 with open(best_k_path, 'r') as f:
                     d['n_clusters'] = int(f.read().strip())
         
         # Fallback to current/best_k.txt at root if n_clusters still not set
         if d['n_clusters'] is None:
-            fallback_k = root_prefix / 'current/best_k.txt'
+            fallback_k = Path('current/best_k.txt')
             if fallback_k.exists():
                  with open(fallback_k, 'r') as f:
                     d['n_clusters'] = int(f.read().strip())
 
         # Load labels
-        labels_npy_path = root_prefix / 'current/labels.npy'
+        labels_npy_path = Path(os.path.expanduser(config.labels_path))
         if labels_npy_path.exists():
             labels = np.load(labels_npy_path)
         else:
-            labels = np.load(root_prefix / config.labels_path)
+            labels = np.load(labels_npy_path)
             
-        with open(root_prefix / config.config_clustering_path, 'r') as f:
+        with open(os.path.expanduser(config.config_clustering_path), 'r') as f:
             config_clustering = json.load(f)
         
         d.update({"strategy": f"{strategy}-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
