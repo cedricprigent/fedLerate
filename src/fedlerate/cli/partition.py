@@ -74,7 +74,7 @@ def main():
     elif dataset == "PACS-soft":
         generate_pacs_soft_partitions()
     elif dataset == "PACS-strict":
-        generate_pacs_strict_partitions(alpha=alpha, n_partitions_per_domain=clients//4)
+        generate_pacs_strict_partitions(alpha=alpha, n_partitions_per_domain=clients//4, root=root)
     elif dataset == "SpeechCommands":
         generate_speech_commands_partitions(alpha=alpha, n_clients=clients, root=root)
 

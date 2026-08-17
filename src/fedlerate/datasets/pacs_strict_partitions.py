@@ -9,6 +9,7 @@ import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets.folder import default_loader
 from torchvision.transforms import Compose, ToTensor, Normalize, Resize
+from fedlerate.data.transforms import get_normalization
 
 from fedlerate.data.partition import FolderPartition
 
@@ -67,21 +68,21 @@ def dirichlet_partitions(
     return datasets
 
 
-def generate_pacs_strict_partitions(n_partitions_per_domain=10, alpha=10):
+def generate_pacs_strict_partitions(n_partitions_per_domain=10, alpha=10, root='/tmp/app/data/pacs_data/'):
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
 
     # dataset path
-    base_path = '/tmp/app/data/pacs_data/'
-    photos_path = f'{base_path}photo/'
-    art_path = f'{base_path}art_painting/'
-    cartoon_path = f'{base_path}cartoon/'
-    sketch_path = f'{base_path}sketch/'
+    photos_path = f'{root}/photo/'
+    art_path = f'{root}/art_painting/'
+    cartoon_path = f'{root}/cartoon/'
+    sketch_path = f'{root}/sketch/'
     paths = [photos_path, art_path, cartoon_path, sketch_path]
 
     # dataloaders
-    transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True)])
+    transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True), get_normalization(channels=3)])
     datasets = [ImageFolder(p, transform=transform) for p in paths]
+
     dataloaders = [DataLoader(ds, batch_size=32, shuffle=True) for ds in datasets]
 
     print("#################################################")
