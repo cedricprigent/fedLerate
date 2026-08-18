@@ -17,15 +17,15 @@ class FedAvgServer(ServerABC):
         for rnd in range(self.config['n_rounds']):
             self.log.info(f"### Round {rnd} ###")
 
-            selected_clients = self.select_clients(rnd)
+            self.sampled_clients = self.select_clients(rnd)
 
             n_jobs = self.config.get('n_jobs', 1)
             if n_jobs > 1:
                 with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-                    client_updates = list(executor.map(lambda c: c.train(), selected_clients))
+                    client_updates = list(executor.map(lambda c: c.train(), self.sampled_clients))
             else:
                 client_updates = []
-                for client in selected_clients:
+                for client in self.sampled_clients:
                     client_updates.append(client.train())
 
             self.aggregate(client_updates)
