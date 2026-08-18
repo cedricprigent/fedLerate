@@ -11,7 +11,7 @@ class FedAvgServer(ServerABC):
 
     def train(self):
         # Main training loop
-        self.log.info("Training started")
+        self.log.info(f"Training started for {self.config['n_rounds']} rounds with strategy: {self.strategy}")
         self.broadcast_model()
         
         for rnd in range(self.config['n_rounds']):
