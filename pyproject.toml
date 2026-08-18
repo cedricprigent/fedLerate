@@ -16,7 +16,10 @@ dependencies = [
   "datasets",
   "torch",
   "numpy",
-  "torchvision"
+  "torchvision",
+  "torchaudio",
+  "hydra-core",
+  "scikit-learn"
 ]
 
 [project.urls]
