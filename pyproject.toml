@@ -20,6 +20,7 @@ dependencies = [
   "torchaudio",
   "hydra-core",
   "scikit-learn"
+  "torchcodec"
 ]
 
 [project.urls]
