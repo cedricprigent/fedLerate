@@ -52,12 +52,16 @@ def dirichlet_partitions(
         MIN_SIZE = min([len(y) for y in Y])
 
     if transform is not None:
-        datasets = [
-            torch.utils.data.TensorDataset(
-                transform[j](X[j]),
-                torch.from_numpy(Y[j])
-            ) for j in range(num_clients)
-        ]
+        datasets = []
+        for j in range(num_clients):
+            # Transform data item-by-item
+            transformed_data = torch.stack([transform[j](img) for img in X[j]])
+            datasets.append(
+                torch.utils.data.TensorDataset(
+                    transformed_data,
+                    torch.from_numpy(Y[j])
+                )
+            )
     else:
         datasets = [
             torch.utils.data.TensorDataset(

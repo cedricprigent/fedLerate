@@ -1,4 +1,11 @@
 from torchvision.transforms.functional import rotate
+from torchvision.transforms import Normalize
+
+def get_normalization(channels=3):
+    if channels == 1:
+        return Normalize(mean=[0.449], std=[0.226])
+    else:
+        return Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 class Rotate(object):
     """Rotate PIL sample."""

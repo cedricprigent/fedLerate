@@ -3,7 +3,7 @@ import torch
 from torchvision.datasets import MNIST
 import torchvision.transforms as transforms
 
-from fedlerate.data.transforms import Rotate, MinMaxScaler
+from fedlerate.data.transforms import Rotate, get_normalization
 from fedlerate.data.partition import generate_partitions
 
 def generate_mnist_partitions(alpha, n_clients):
@@ -14,11 +14,12 @@ def generate_mnist_partitions(alpha, n_clients):
 
     clients_per_cluster = n_clients // 4
 
-    # Prepare transforms for each client
+    # Prepare transforms for each client
     transform = [transforms.Compose([
+        transforms.ToPILImage(),
         Rotate((client // clients_per_cluster) * 90),
-        transforms.Lambda(lambda image: torch.tensor(np.array(image).astype(np.float32))),
-        MinMaxScaler(min_value=0, max_value=255)
+        transforms.ToTensor(),
+        get_normalization(channels=1)
     ]) for client in range(n_clients)]
 
     # Generate client partitions

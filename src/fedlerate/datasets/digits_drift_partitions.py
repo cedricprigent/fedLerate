@@ -5,6 +5,7 @@ import os
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 from datasets import Dataset as HFDataset
+from fedlerate.data.transforms import get_normalization
 
 def get_targets(ds):
     """Extract labels from different dataset formats."""
@@ -72,10 +73,11 @@ def create_digits_drift_partitions(
 
     # Note: Normalize with 3 values for RGB compatibility
     transform = transforms.Compose([
+
         transforms.Resize((28, 28)),
         transforms.Lambda(lambda x: x.convert("RGB") if hasattr(x, "convert") else x),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        get_normalization(channels=3)
     ])
     
     print("#################################################")

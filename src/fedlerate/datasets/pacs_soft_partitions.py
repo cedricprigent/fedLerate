@@ -10,6 +10,7 @@ import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.datasets.folder import default_loader
 from torchvision.transforms import Compose, ToTensor, Normalize, Resize
+from fedlerate.data.transforms import get_normalization
 
 from fedlerate.data.partition import FolderPartition
 
@@ -102,7 +103,7 @@ def generate_pacs_soft_partitions():
     paths = [photos_path, art_path, cartoon_path, sketch_path]
 
     # dataloaders
-    transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True)])
+    transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True), get_normalization(channels=3)])
     datasets = [ImageFolder(p, transform=transform) for p in paths]
     split_ratio = [
         [0.85, 0.05, 0.05, 0.05],
