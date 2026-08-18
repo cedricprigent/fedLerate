@@ -106,12 +106,8 @@ def main(config):
         if labels_npy_path.exists():
             labels = np.load(labels_npy_path)
         else:
-            labels = np.load(labels_npy_path)
-            
-        with open(os.path.expanduser(config.config_clustering_path), 'r') as f:
-            config_clustering = json.load(f)
+            raise ValueError()
         
-        d.update({"strategy": f"{strategy}-{config_clustering['clustering']['distance_metric']}-{config_clustering['protocol']['domain_size']}"})
         d.update({"labels": labels})
         if d['n_clusters'] is None:
             d['n_clusters'] = len(np.unique(labels))
