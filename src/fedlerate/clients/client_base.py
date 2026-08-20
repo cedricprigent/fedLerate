@@ -45,5 +45,6 @@ class BaseClient(ClientABC):
         # Initialize local data for the client
         self.trainloader, self.testloader, _ = load_partition(
             num_partition=self.client_id, 
-            batch_size=self.config['batch_size']
+            batch_size=self.config['batch_size'],
+            seed=self.config.get('seed', None)
         )

@@ -108,7 +108,7 @@ def generate_partitions(trainset, testset, n_partitions, alpha, transform, seed=
 
 _PARTITION_CACHE = {}
 
-def load_partition(num_partition, batch_size=16, transform=None, target_transform=None):
+def load_partition(num_partition, batch_size=16, transform=None, target_transform=None, seed=None):
     """Load generated train and test subset with in-memory caching"""
     if num_partition in _PARTITION_CACHE:
         trainset, testset = _PARTITION_CACHE[num_partition]
@@ -119,19 +119,25 @@ def load_partition(num_partition, batch_size=16, transform=None, target_transfor
         testset = torch.load(test_path, weights_only=False)
         _PARTITION_CACHE[num_partition] = (trainset, testset)
 
+    if seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(seed)
+
     # Generate dataloaders
     trainloader = DataLoader(
             trainset,
             batch_size=batch_size,
             shuffle=True,
-            pin_memory=True
+            pin_memory=True,
+            generator=generator if seed is not None else None
         )
 
     testloader = DataLoader(
             testset,
             batch_size=batch_size,
             shuffle=True,
-            pin_memory=True
+            pin_memory=True,
+            generator=generator if seed is not None else None
         )
 
     num_examples = {"trainset": len(trainloader), "testset": len(testloader)}
