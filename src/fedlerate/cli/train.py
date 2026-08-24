@@ -106,7 +106,7 @@ def main(config):
         if labels_npy_path.exists():
             labels = np.load(labels_npy_path)
         else:
-            raise ValueError("Labels file not found at specified path. Please provide a valid path to the labels .npy file.")
+            raise ValueError(f"Labels file not found at specified path ({config.labels_path}). Please provide a valid path to the labels .npy file.")
         
         d.update({"labels": labels})
         if d['n_clusters'] is None:
