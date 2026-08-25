@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from fedlerate.servers.server_cfl import CFLServer
-from fedlerate.clients.client_base import BaseClient
+from fedlerate.clients.client_erm import ClientERM
 from fedlerate.models.models import load_model
 import numpy as np
 
@@ -10,18 +10,18 @@ class IFCAServer(CFLServer):
         super(IFCAServer, self).__init__(config)
 
     def init_clients(self):
-        self.clients = self._init_clients_parallel(BaseClient)
+        self.clients = self._init_clients_parallel(ClientERM)
 
     def assign_clusters(self, selected_clients):
         cluster_assignments = [[] for _ in range(self.config['n_clusters'])]
         
         def get_best_cluster(client):
-            losses = []
+            accuracies = []
             for cluster in range(self.config['n_clusters']):
                 self.broadcast_model([client], self.models[cluster])
-                loss = client.evaluate()
-                losses.append(loss)
-            return client.client_id, np.argmin(losses)
+                acc = client.evaluate_erm()
+                accuracies.append(acc)
+            return client.client_id, np.argmax(accuracies)
 
         n_jobs = self.config.get('n_jobs', 1)
         if n_jobs > 1:
@@ -45,11 +45,11 @@ class IFCAServer(CFLServer):
             selected_clients = self.select_clients()
 
             # Warmup phase - Run FedAvg for a few rounds to get initial models
-            if rnd < 5:
+            if rnd < 3:
                 # Assign all clients to a single cluster and train with FedAvg
                 cluster_assignments = [[] for _ in range(self.config['n_clusters'])]
                 cluster_assignments[0] = [client.client_id for client in selected_clients]
-            elif rnd == 5:
+            elif rnd == 3:
                 # Copy global model to all cluster models
                 for cid in range(self.config['n_clusters']):
                     self.models[cid].load_state_dict(self.models[0].state_dict())
