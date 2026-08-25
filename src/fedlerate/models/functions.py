@@ -601,6 +601,35 @@ def evaluate(model, dataloader, device=DEVICE):
         return correct / total
 
 
+def evaluate_erm(model, dataloader, sampling_ratio=1.0, device=DEVICE):
+    # Evaluate the model on the given dataloader with a sampling ratio
+    correct = 0
+    total = 0
+
+    n_batches = len(dataloader)
+    n_sampled_batches = max(1, int(n_batches * sampling_ratio))
+
+    with torch.no_grad():
+        for batch, (x, y) in enumerate(dataloader):
+            if batch >= n_sampled_batches:
+                break
+            
+            x = x.to(device)
+            if len(x.shape) == 3:
+                x = x.unsqueeze(1)  # Add channel dimension for MNIST
+            y = y.to(device)
+
+            # Forward pass
+            output = model(x)
+
+            # Compute score
+            _, predicted = torch.max(output, 1)
+            total += y.size(0)
+            correct += (predicted == y).sum().item()
+
+    return correct / total
+
+
 def evaluate_fedmix(models, weights, dataloader, device=DEVICE, threshold=0.05):
     for model in models:
         model.eval()
