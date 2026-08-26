@@ -50,7 +50,7 @@ class RDPCFLClient(BaseClient):
             "loss": loss
         }
 
-    def evaluate_loss(self, model_weights, sampling_ratio=None):
+    def evaluate_loss(self, model_weights):
         """Evaluate training loss on a given set of weights (for Loss Refinement)."""
         try:
             sampling_ratio = self.config.get('sampling_ratio')

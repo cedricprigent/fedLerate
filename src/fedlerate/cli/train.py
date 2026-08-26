@@ -8,6 +8,7 @@ from fedlerate.servers.server_per_ifca import PerIFCAServer
 from fedlerate.servers.server_per_fcfl import PerFCFLServer
 from fedlerate.servers.server_fedmix import FedMixServer
 from fedlerate.servers.server_rdpcfl import RDPCFLServer
+from fedlerate.servers.server_ebs import EBSCFLServer
 
 import hydra
 from pathlib import Path
@@ -31,7 +32,7 @@ def main(config):
 
     OmegaConf.set_struct(config, False)
     
-    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "n_jobs", "eval_every", "seed", "clip_norm", "noise_multiplier", "sampling_ratio"]
+    strategy_keys = ["fedprox_mu", "ditto_lambda", "n_clusters", "n_jobs", "eval_every", "seed", "clip_norm", "noise_multiplier", "sampling_ratio", "epsilon", "delta"]
     for k in strategy_keys:
         if k not in config:
             config[k] = None
@@ -70,6 +71,8 @@ def main(config):
         clip_norm=config.clip_norm,
         noise_multiplier=config.noise_multiplier,
         sampling_ratio=config.sampling_ratio,
+        epsilon=config.epsilon,
+        delta=config.delta,
     )
     # Run experiment
     if strategy == 'FedAvg':
@@ -126,6 +129,9 @@ def main(config):
         server.run()
     if strategy == 'RDPCFL':
         server = RDPCFLServer(d)
+        server.run()
+    if strategy == 'EBSCFL':
+        server = EBSCFLServer(d)
         server.run()
 
 if __name__ == '__main__':

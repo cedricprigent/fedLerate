@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import torch
 from sklearn.mixture import GaussianMixture
+from opacus.accountants.utils import get_noise_multiplier
 
 from fedlerate.servers.server_cfl import CFLServer
 from fedlerate.clients.client_rdpcfl import RDPCFLClient
@@ -23,6 +24,26 @@ def set_flat_params(model, flat_params):
 
 class RDPCFLServer(CFLServer):
     def __init__(self, config):
+        if config.get('epsilon') is not None:
+            target_epsilon = config['epsilon']
+            target_delta = config.get('delta') or 1e-5
+            sample_rate = config['n_clients_per_round'] / config['n_clients']
+            epochs = config['n_rounds']
+
+            noise_multiplier = get_noise_multiplier(
+                target_epsilon=target_epsilon,
+                target_delta=target_delta,
+                sample_rate=sample_rate,
+                epochs=epochs
+            )
+            config['noise_multiplier'] = noise_multiplier
+            import logging
+            logging.getLogger(__name__).info(
+                f"DP: epsilon={target_epsilon}, delta={target_delta} → "
+                f"noise_multiplier={noise_multiplier:.4f} "
+                f"(sample_rate={sample_rate:.4f}, rounds={epochs})"
+            )
+
         super(RDPCFLServer, self).__init__(config)
         self.client_clusters = {}
 
