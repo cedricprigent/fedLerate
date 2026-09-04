@@ -10,7 +10,7 @@ class CFLServer(ServerABC):
         super(CFLServer, self).__init__(config)
 
     def init_model(self) -> None:
-        self.models = [load_model(self.config['model_name'], device='cpu') for _ in range(self.config['n_clusters'])]
+        self.models = [load_model(self.config['model_name'], n_classes=self.config['n_classes'], device='cpu') for _ in range(self.config['n_clusters'])]
 
     def broadcast_model(self, clients, model):
         self._broadcast_parallel(clients, model.state_dict())

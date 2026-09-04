@@ -9,7 +9,7 @@ class PFLClient(BaseClient):
         self.return_full_model = False
 
     def init_model(self):
-        self.model = load_model(self.config['model_name'], device=self.device)
+        self.model = load_model(self.config['model_name'], n_classes=self.config["n_classes"], device=self.device)
 
     def set_model_weights(self, weights):
         if self.return_full_model:

@@ -39,7 +39,7 @@ class BaseClient(ClientABC):
         return accuracy
 
     def init_model(self):
-        self.model = load_model(self.config['model_name'], device=self.device)
+        self.model = load_model(self.config['model_name'], n_classes=self.config['n_classes'], device=self.device)
 
     def init_data(self):
         # Initialize local data for the client

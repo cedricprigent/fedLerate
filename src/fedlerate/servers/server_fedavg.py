@@ -85,7 +85,7 @@ class FedAvgServer(ServerABC):
         return [self.clients[i] for i in indices]
 
     def init_model(self) -> None:
-        self.global_model = load_model(self.config['model_name'], device='cpu')
+        self.global_model = load_model(self.config['model_name'], n_classes=self.config["n_classes"], device='cpu')
 
     def broadcast_model(self):
         # Broadcast the global model to all clients
