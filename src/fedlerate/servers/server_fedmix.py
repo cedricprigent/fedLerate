@@ -1,82 +1,111 @@
-from concurrent.futures import ThreadPoolExecutor
-from fedlerate.servers.server_cfl import CFLServer
+import gc
 from fedlerate.clients.client_fedmix import FedMixClient
-from fedlerate.models.models import load_model
-import numpy as np
+from fedlerate.servers.server_cfl import CFLServer
 
 
 class FedMixServer(CFLServer):
+    """Memory-optimized Server for FedMix.
+
+    Manages global mixture models and orchestrates federated training and
+    evaluation rounds without overloading RAM/GPU VRAM.
+    """
+
     def __init__(self, config):
         super(FedMixServer, self).__init__(config)
 
     def init_clients(self):
+        """Initialize all clients using the base server initialization."""
         self.clients = self._init_clients_parallel(FedMixClient)
-        
-    def broadcast_model(self, clients, models):
-        weights = [model.state_dict() for model in models]
-        self._broadcast_parallel(clients, weights)
 
     def train(self):
-        # Main training loop
+        """Main Federated Learning Training Loop."""
         self.log.info("Training started")
-        
+
         for rnd in range(self.config['n_rounds']):
             self.log.info(f"### Round {rnd} ###")
 
+            # 1. Select clients for the current round
             selected_clients = self.select_clients()
 
-            # Broadcast updated models to selected clients only for training
-            self.broadcast_model(selected_clients, self.models)
+            # 2. Extract global state dicts ONCE on CPU to share across workers
+            global_weights = [model.state_dict() for model in self.models]
 
-            # Local training for selected clients
-            n_jobs = self.config.get('n_jobs', 1)
-            if n_jobs > 1:
-                with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-                    updates = list(executor.map(lambda c: c.train(), selected_clients))
-            else:
-                updates = []
-                for client in selected_clients:
-                    update = client.train()
-                    updates.append(update)
+            # 3. Perform local client training sequentially to prevent VRAM spikes
+            updates = []
+            for client in selected_clients:
+                # Pass global weights directly to stateless client.train()
+                update = client.train(global_weights=global_weights)
+                updates.append(update)
 
-            # Aggregate updates
+            # 4. Aggregate updates into global models
             self.aggregate(updates)
 
+            # Calculate average training loss for selected clients
             total_loss = sum(update['loss'] for update in updates)
+            avg_loss = total_loss / len(selected_clients) if selected_clients else 0.0
 
-            # Evaluate - To save memory, we broadcast and evaluate one by one
-            # The broadcast_model(self.clients, ...) call stores all models in all clients.
-            # Instead, we'll rely on FedMixClient.evaluate() which now handles device movement.
-            if (rnd + 1) % self.config.get('eval_every', 1) == 0 or (rnd + 1) == self.config['n_rounds']:
-                # First, update all clients with the latest global mixture models
-                weights = [model.state_dict() for model in self.models]
-                self._broadcast_parallel(self.clients, weights)
+            # 5. Free client update dictionaries from RAM
+            del updates
+            del global_weights
+            gc.collect()
+
+            # 6. Periodic Evaluation Phase
+            eval_every = self.config.get('eval_every', 1)
+            is_last_round = (rnd + 1) == self.config['n_rounds']
+
+            if (rnd + 1) % eval_every == 0 or is_last_round:
+                self.log.info(f"Evaluating round {rnd}...")
                 
-                accs = self.evaluate()
-                accuracy = sum(accs) / len(accs)
+                # Fetch fresh aggregated global weights
+                eval_weights = [model.state_dict() for model in self.models]
+                accs = []
+                
+                # Evaluate on all clients sequentially
+                for client in self.clients:
+                    acc = client.evaluate(global_weights=eval_weights)
+                    accs.append(acc)
+
+                accuracy = sum(accs) / len(accs) if accs else 0.0
+                
+                del eval_weights
+                gc.collect()
             else:
                 accuracy = None
 
+            # 7. Metrics Logging & Saving
             metrics = {
                 "round": rnd,
                 "strategy": self.strategy,
                 "model_name": self.config['model_name'],
                 "accuracy": accuracy,
-                "loss": total_loss / len(selected_clients)
+                "loss": avg_loss
             }
             self._save_metrics(metrics, self.config['metrics_save_path'])
             self._log_metrics(metrics)
 
     def aggregate(self, client_updates):
+        """Weighted average aggregation for Mixture of Experts (K clusters)."""
         if not client_updates:
             return
+
         total_data_size = sum(update['data_size'] for update in client_updates)
         if total_data_size == 0:
             return
 
-        for k in range(self.config['n_clusters']):
+        n_clusters = self.config['n_clusters']
+
+        # Aggregate weights for each mixture component k independently
+        for k in range(n_clusters):
             model_keys = client_updates[0]['weights'][k].keys()
             cum_weights = {}
+
             for key in model_keys:
-                cum_weights[key] = sum(update['weights'][k][key] * update['data_size'] for update in client_updates) / total_data_size
+                # Compute weighted sum across all client updates
+                weighted_sum = sum(
+                    update['weights'][k][key] * update['data_size']
+                    for update in client_updates
+                )
+                cum_weights[key] = weighted_sum / float(total_data_size)
+
+            # Load newly aggregated weights into the server's global model
             self.models[k].load_state_dict(cum_weights)
