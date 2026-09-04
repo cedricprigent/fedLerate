@@ -158,8 +158,8 @@ def train(model, dataloader, epochs, lr=3e-4, device=DEVICE, noise_mixer=None):
                 # 2. Forward pass
                 logits = model(x)
                 
-                # Filter out invalid labels (-1) if they somehow persist
-                mask = (y >= 0) & (y < 5)  # Assuming 5 classes
+                # Filter out invalid labels (-1) and ensure labels are within the number of classes
+                mask = (y >= 0) & (y < logits.size(1))
                 logits = logits[mask]
                 y = y[mask]
                 

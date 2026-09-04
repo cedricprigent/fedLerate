@@ -57,6 +57,7 @@ def main(config):
         n_clients=config.scenario.n_clients,
         local_epochs=config.scenario.local_epochs,
         model_name=config.scenario.model,
+        n_classes=config.scenario.n_classes,
         n_clients_per_round=config.scenario.n_clients_per_round,
         batch_size=config.scenario.batch_size,
         metrics_save_path=metrics_save_path,

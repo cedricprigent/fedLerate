@@ -315,20 +315,20 @@ class DeepSVDD(nn.Module):
         return self.encoder(x)
 
 
-def load_model(model_name, device):
+def load_model(model_name, n_classes, device):
 
     if model_name == 'DummyModel':
         model = DummyModel().to(device)
     elif model_name == 'LeNet5':
-        model = LeNet5().to(device)
+        model = LeNet5(num_classes=n_classes).to(device)
     elif model_name == 'LeNet5_Features':
         model = LeNet5_Features().to(device)
     elif model_name == 'LeNet5_Classifier':
-        model = LeNet5_Classifier().to(device)
+        model = LeNet5_Classifier(num_classes=n_classes).to(device)
     elif model_name == 'PFL_LeNet5':
         model = PFL_LeNet5().to(device)
     elif model_name == 'PFL_LeNet5_3C':
-        model = PFL_LeNet5(in_channels=3).to(device)
+        model = PFL_LeNet5(in_channels=3, num_classes=n_classes).to(device)
     elif model_name == 'ResNet18':
         model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).to(device)
         model.fc = torch.nn.Linear(model.fc.in_features, 7).to(device)

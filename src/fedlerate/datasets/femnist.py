@@ -19,14 +19,13 @@ def create_femnist_partitions(
     :param test_ratio: Percentage of data reserved for local test set per client.
     :param data_dir: Target output folder path.
     """
-    os.makedirs(os.path.join(data_dir, 'train'), exist_ok=True)
-    os.makedirs(os.path.join(data_dir, 'test'), exist_ok=True)
+    os.makedirs(os.path.join("/tmp/app/data", 'train'), exist_ok=True)
+    os.makedirs(os.path.join("/tmp/app/data", 'test'), exist_ok=True)
 
     transform = transforms.Compose([
         transforms.Resize((28, 28)),
-        transforms.Lambda(lambda x: x.convert("RGB") if hasattr(x, "convert") else x),
         transforms.ToTensor(),
-        get_normalization(channels=3)
+        get_normalization(channels=1)
     ])
     
     print("#################################################")
@@ -46,7 +45,7 @@ def create_femnist_partitions(
             label = item["character"]
 
             if hasattr(img, "convert"):
-                img = img.convert("RGB")
+                img = img.convert("L")
 
             data_list.append(transform(img))
             targets_list.append(label)
@@ -78,8 +77,8 @@ def create_femnist_partitions(
         train_tensor_ds = process_subset_indices(femnist_raw, train_indices)
         test_tensor_ds = process_subset_indices(femnist_raw, test_indices)
 
-        torch.save(train_tensor_ds, os.path.join(data_dir, f"train/train_subset-{client_idx}.pth"))
-        torch.save(test_tensor_ds, os.path.join(data_dir, f"test/test_subset-{client_idx}.pth"))
+        torch.save(train_tensor_ds, os.path.join("/tmp/app/data", f"train/train_subset-{client_idx}.pth"))
+        torch.save(test_tensor_ds, os.path.join("/tmp/app/data", f"test/test_subset-{client_idx}.pth"))
 
         print(f" Saved client {client_idx} (Writer {writer_id}): {len(train_tensor_ds)} train, {len(test_tensor_ds)} test samples")
 
