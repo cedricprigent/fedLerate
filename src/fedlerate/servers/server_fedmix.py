@@ -34,7 +34,7 @@ class FedMixServer(CFLServer):
             updates = []
             for client in selected_clients:
                 # Pass global weights directly to stateless client.train()
-                update = client.train(global_weights=global_weights)
+                update = client.train(global_weights=global_weights, budget=1/self.config['n_clusters'])
                 updates.append(update)
 
             # 4. Aggregate updates into global models

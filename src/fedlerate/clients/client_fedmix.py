@@ -9,19 +9,24 @@ from fedlerate.models.models import load_model
 class FedMixClient(ClientABC):
 
     def __init__(self, client_id, config, device):
-        self.models = None
         super(FedMixClient, self).__init__(client_id, config, device)
+        self.init_model(k=self.config["n_clusters"])
+        self.init_data()
         self.weights = torch.nn.Parameter(
             torch.ones(self.config["n_clusters"], device=self.device)
             / self.config["n_clusters"]
         )
 
     def init_model(self, k=None):
-        self.models = None
+        """Allocate the k mixture models once and keep them alive across rounds."""
+        n_clusters = self.config["n_clusters"]
+        self.models = [
+            load_model(self.config["model_name"], n_classes=self.config["n_classes"], device=self.device)
+            for _ in range(n_clusters)
+        ]
 
     def init_data(self):
-        # Do NOTHING here! Don't load data during server init.
-        pass
+        self.trainloader, self.testloader = self._get_dataloaders()
 
     def _get_dataloaders(self):
         # Fetch dataloaders strictly when needed
@@ -30,34 +35,28 @@ class FedMixClient(ClientABC):
         )
         return trainloader, testloader
 
-    def train(self, global_weights=None):
+    def train(self, global_weights=None, budget=1.0):
         if global_weights is None:
             raise ValueError(
                 "FedMixClient requires global_weights passed to train()."
             )
 
-        # 1. Instantiate DataLoaders on-demand
-        trainloader, _ = self._get_dataloaders()
-        data_size = len(trainloader.dataset)
+        data_size = len(self.trainloader.dataset)
 
-        # 2. Instantiate models on-demand
-        k = self.config["n_clusters"]
-        models = [
-            load_model(self.config["model_name"], n_classes=self.config["n_classes"], device=self.device)
-            for _ in range(k)
-        ]
+        # 2. Reload weights into the cached model instances (no allocation)
         for i, w in enumerate(global_weights):
-            models[i].load_state_dict(w)
+            self.models[i].load_state_dict(w)
 
         # 3. Train
         loss, _ = train_fedmix(
-            models,
+            self.models,
             self.weights,
-            dataloader=trainloader,
+            dataloader=self.trainloader,
             epochs=self.config["local_epochs"],
             lr=self.config["local_lr"],
             device=self.device,
             noise_mixer=getattr(self, "noise_mixer", None),
+            budget=budget
         )
 
         self.config["local_lr"] *= self.config.get("lr_decay", 1.0)
@@ -65,15 +64,8 @@ class FedMixClient(ClientABC):
         # 4. Extract weights
         updated_weights = [
             {k: v.cpu().clone() for k, v in m.state_dict().items()}
-            for m in models
+            for m in self.models
         ]
-
-        # 5. Full memory purge: delete dataloader, models, clear cache
-        del trainloader
-        del models
-        if self.device.type == "cuda":
-            torch.cuda.empty_cache()
-        gc.collect()
 
         return {
             "weights": updated_weights,
@@ -87,28 +79,15 @@ class FedMixClient(ClientABC):
                 "FedMixClient requires global_weights passed to evaluate()."
             )
 
-        _, testloader = self._get_dataloaders()
-
-        k = self.config["n_clusters"]
-        models = [
-            load_model(self.config["model_name"], n_classes=self.config["n_classes"], device=self.device)
-            for _ in range(k)
-        ]
+        # Reload weights into the cached model instances (no allocation)
         for i, w in enumerate(global_weights):
-            models[i].load_state_dict(w)
+            self.models[i].load_state_dict(w)
 
         accuracy = evaluate_fedmix(
-            models,
+            self.models,
             self.weights,
-            dataloader=testloader,
+            dataloader=self.testloader,
             device=self.device,
         )
-
-        # Full memory purge
-        del testloader
-        del models
-        if self.device.type == "cuda":
-            torch.cuda.empty_cache()
-        gc.collect()
 
         return accuracy

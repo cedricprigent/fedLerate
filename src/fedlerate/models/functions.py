@@ -430,7 +430,7 @@ def train_ditto(personalized_model, global_model, dataloader, epochs, lr=3e-4, l
         return train_loss, train_accuracy
 
 
-def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE, noise_mixer=None):
+def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE, noise_mixer=None, budget=1.0):
     if isinstance(models[0], PFL_AutoEncoder):
         criterion = torch.nn.MSELoss()
         params = [weights]
@@ -438,10 +438,15 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE, no
             params += list(model.parameters())
         optimizer = torch.optim.Adam(params, lr=lr)
 
+        epoch_training_budget = len(dataloader) * budget
+
         for epoch in range(epochs):
             train_loss = 0
 
             for batch, x in enumerate(dataloader):
+                if batch >= epoch_training_budget:
+                    break  # Limit training to the budget for this epoch
+
                 if isinstance(x, (list, tuple)): x = x[0]
                 x = x.to(device)
                 # Forward pass
@@ -470,13 +475,18 @@ def train_fedmix(models, weights, dataloader, epochs, lr=3e-4, device=DEVICE, no
         for model in models:
             params += list(model.parameters())
         optimizer = torch.optim.Adam(params, lr=lr)
+
         k = len(models)
+        epoch_training_budget = len(dataloader) / k
 
         for epoch in range(epochs):
             train_loss = 0
             train_accuracy = 0
 
             for batch, (x, y) in enumerate(dataloader):
+                if batch >= epoch_training_budget:
+                    break  # Limit training to the budget for this epoch
+
                 if noise_mixer is not None:
                     if random.random() < 0.52:  # 50% chance to apply noise augmentation
                         x = noise_mixer(x)  # Apply background noise augmentation
@@ -666,6 +676,8 @@ def evaluate_fedmix(models, weights, dataloader, device=DEVICE, threshold=0.05):
         correct = 0
         total = 0
 
+        normalized_weights = torch.softmax(weights, dim=0).to(device)
+
         with torch.no_grad():
             for batch, (x, y) in enumerate(dataloader):
                 x = x.to(device)
@@ -674,12 +686,9 @@ def evaluate_fedmix(models, weights, dataloader, device=DEVICE, threshold=0.05):
                 y = y.to(device)
 
                 # Forward pass
-                normalized_weights = torch.softmax(weights, dim=0)
-
                 model_outputs = torch.stack([m(x) for m in models])  # (k, batch, classes)
 
                 output = (normalized_weights.view(-1, 1, 1) * model_outputs).sum(0)
-
 
                 # Compute score
                 _, predicted = torch.max(output, 1)
