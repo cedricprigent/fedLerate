@@ -304,41 +304,46 @@ def train_fedprox(model, dataloader, epochs, mu=0.01, lr=3e-4, device=DEVICE, no
         global_model = copy.deepcopy(model)
 
         model.train()
-
         for epoch in range(epochs):
-            train_loss = 0
-            train_accuracy = 0
+            total_loss = 0.0
+            correct_preds = 0
+            total_samples = 0
 
-            for batch, (x, y) in enumerate(dataloader):
-                if noise_mixer is not None:
-                    if random.random() < 0.52:  # 50% chance to apply noise augmentation
-                        x = noise_mixer(x)  # Apply background noise augmentation
+            for x, y in dataloader:
+                if noise_mixer is not None and random.random() < 0.52:
+                    x = noise_mixer(x)
 
                 if len(x.shape) == 3:
-                    x = x.unsqueeze(1)  # Add channel dimension for MNIST
+                    x = x.unsqueeze(1)
 
-                x = x.to(device)
-                y = y.to(device)
+                x = x.to(device, non_blocking=True)
+                y = y.to(device, non_blocking=True)
 
-                # Forward pass
+                optimizer.zero_grad(set_to_none=True)
+
+                # 1. Forward pass & task loss
                 output = model(x)
+                loss = criterion(output, y)
 
-                # Calculate loss
-                loss = criterion(output, y) + proximal_term(model, global_model, mu=mu)
-                train_loss += loss.item()
-                train_accuracy += accuracy_fn(y, torch.argmax(output, dim=1))
-
-                # Zero grad
-                optimizer.zero_grad()
-
-                # Backprog
+                # 2. Backward pass builds standard task gradients
                 loss.backward()
 
-                # Optimize
+                # 3. Add proximal gradient: \mu * (w_local - w_global)
+                with torch.no_grad():
+                    for p_local, p_global in zip(model.parameters(), global_model.parameters()):
+                        if p_local.grad is not None:
+                            p_local.grad.add_(p_local - p_global, alpha=mu)
+
+                # 4. Step optimizer with combined gradients
                 optimizer.step()
 
-        train_loss = train_loss / len(dataloader)
-        train_accuracy = train_accuracy / len(dataloader)
+                # Non-blocking tracking
+                total_loss += loss.detach() * x.size(0)
+                correct_preds += (output.argmax(dim=1) == y).sum()
+                total_samples += x.size(0)
+
+            train_loss = (total_loss / total_samples).item()
+            train_accuracy = (correct_preds / total_samples).item()
         return train_loss, train_accuracy
 
 
