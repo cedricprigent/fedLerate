@@ -3,7 +3,7 @@ import random
 
 from fedlerate.datasets.mnist_partitions import generate_mnist_partitions
 from fedlerate.datasets.digits_drift_partitions import create_digits_drift_partitions
-from fedlerate.datasets.pacs_soft_partitions import generate_pacs_soft_partitions
+from fedlerate.datasets.pacs_soft_partitions import generate_pacs_mixed_partitions
 from fedlerate.datasets.pacs_strict_partitions import generate_pacs_strict_partitions
 from fedlerate.datasets.speech_commands import generate_speech_commands_partitions
 from fedlerate.datasets.femnist import create_femnist_partitions
@@ -73,7 +73,7 @@ def main():
     elif dataset == "DigitsDrift":
         create_digits_drift_partitions(alpha=alpha, n_clients=clients)
     elif dataset == "PACS-soft":
-        generate_pacs_soft_partitions()
+        generate_pacs_mixed_partitions(alpha=alpha, total_clients=clients, root=root)
     elif dataset == "PACS-strict":
         generate_pacs_strict_partitions(alpha=alpha, n_partitions_per_domain=clients//4, root=root)
     elif dataset == "SpeechCommands":
