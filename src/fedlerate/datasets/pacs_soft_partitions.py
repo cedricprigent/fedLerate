@@ -10,7 +10,8 @@ from torchvision.datasets.folder import default_loader
 from torchvision.transforms import Compose, ToTensor, Resize
 from fedlerate.data.transforms import get_normalization
 
-# Simple wrapper to preserve global sample filepaths and class targets
+DOMAINS = ['photo', 'art_painting', 'cartoon', 'sketch']
+
 class CombinedPACSDataset(Dataset):
     def __init__(self, datasets: List[ImageFolder]):
         self.samples = []
@@ -37,24 +38,23 @@ def dirichlet_domain_partitions(
     combined_dataset: CombinedPACSDataset,
     total_clients: int,
     alpha: float,
-) -> Tuple[List[List[str]], List[List[int]]]:
+) -> Tuple[List[List[str]], List[List[int]], List[List[int]]]:
     """Partitions the dataset across clients using a Dirichlet distribution over DOMAIN labels."""
     np.random.seed(0)
     
-    NUM_DOMAINS = 4
+    NUM_DOMAINS = len(DOMAINS)
     MIN_SIZE = 0
     X = [[] for _ in range(total_clients)]
     Y = [[] for _ in range(total_clients)]
+    D = [[] for _ in range(total_clients)]
 
     idx_by_domain = [np.where(combined_dataset.domain_targets == i)[0] for i in range(NUM_DOMAINS)]
 
-    # Ensure each client receives at least 10 data samples across domains
-    while MIN_SIZE < 10:
+    while MIN_SIZE < 20:
         idx_batch = [[] for _ in range(total_clients)]
         for k in range(NUM_DOMAINS):
             np.random.shuffle(idx_by_domain[k])
             
-            # Sample proportions from Dirichlet over DOMAINS
             distributions = np.random.dirichlet(np.repeat(alpha, total_clients))
             distributions = np.array(
                 [
@@ -75,8 +75,9 @@ def dirichlet_domain_partitions(
         np.random.shuffle(idx_batch[i])
         X[i] = [combined_dataset.samples[k] for k in idx_batch[i]]
         Y[i] = [combined_dataset.targets[k] for k in idx_batch[i]]
+        D[i] = [combined_dataset.domain_targets[k] for k in idx_batch[i]]
 
-    return X, Y
+    return X, Y, D
 
 
 def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/data/pacs_data/'):
@@ -84,12 +85,7 @@ def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/d
     os.makedirs('/tmp/app/data/train', exist_ok=True)
     os.makedirs('/tmp/app/data/test', exist_ok=True)
 
-    paths = [
-        f'{root}/photo/',
-        f'{root}/art_painting/',
-        f'{root}/cartoon/',
-        f'{root}/sketch/'
-    ]
+    paths = [f'{root}/{d}/' for d in DOMAINS]
 
     transform = Compose([ToTensor(), Resize(size=(64, 64), antialias=True), get_normalization(channels=3)])
     raw_datasets = [ImageFolder(p) for p in paths]
@@ -99,9 +95,9 @@ def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/d
     print("# Generating MIXED Domain partitions for PACS\t#")
     print(f"# - domain alpha = {alpha}\t\t\t\t#")
     print(f"# - total clients = {total_clients}\t\t\t#")
-    print("#################################################")
+    print("#################################################\n")
 
-    client_paths, client_targets = dirichlet_domain_partitions(
+    client_paths, client_targets, client_domains = dirichlet_domain_partitions(
         combined_dataset=combined_dataset,
         total_clients=total_clients,
         alpha=alpha
@@ -110,9 +106,18 @@ def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/d
     for i in range(total_clients):
         paths_i = client_paths[i]
         targets_i = client_targets[i]
+        domains_i = client_domains[i]
 
-        # 80/20 train/test split per client
-        dataset_size = len(paths_i)
+        # Calcul des proportions par domaine
+        total_samples = len(domains_i)
+        domain_counts = [domains_i.count(d_idx) for d_idx in range(len(DOMAINS))]
+        domain_props = [count / total_samples for count in domain_counts]
+        
+        # Format d'affichage : "photo: 45.2%, art: 10.0%, ..."
+        props_str = ", ".join([f"{DOMAINS[d]}: {p*100:.1f}%" for d, p in enumerate(domain_props)])
+
+        # Split train/test
+        dataset_size = total_samples
         indices = list(range(dataset_size))
         random.seed(0)
         random.shuffle(indices)
@@ -120,7 +125,6 @@ def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/d
         split_idx = int(0.8 * dataset_size)
         train_idx, test_idx = indices[:split_idx], indices[split_idx:]
 
-        # Load & transform images directly
         train_data = np.array([transform(default_loader(paths_i[idx])) for idx in train_idx])
         train_targets = np.array([targets_i[idx] for idx in train_idx])
 
@@ -136,6 +140,8 @@ def generate_pacs_mixed_partitions(total_clients=40, alpha=0.1, root='/tmp/app/d
             torch.from_numpy(test_targets)
         )
 
-        print(f"subset {i}: {len(train_subset)} train data, {len(test_subset)} test data")
+        print(f"Client {i:02d} ({total_samples} samples) | Proportions: [{props_str}]")
+        print(f"  └── Train: {len(train_subset)}, Test: {len(test_subset)}")
+
         torch.save(train_subset, f"/tmp/app/data/train/train_subset-{i}.pth")
         torch.save(test_subset, f"/tmp/app/data/test/test_subset-{i}.pth")
