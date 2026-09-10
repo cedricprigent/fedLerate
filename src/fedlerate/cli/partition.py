@@ -7,6 +7,7 @@ from fedlerate.datasets.pacs_soft_partitions import generate_pacs_mixed_partitio
 from fedlerate.datasets.pacs_strict_partitions import generate_pacs_strict_partitions
 from fedlerate.datasets.speech_commands import generate_speech_commands_partitions
 from fedlerate.datasets.femnist import create_femnist_partitions
+from fedlerate.datasets.officehome import generate_office_home_strict
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -80,7 +81,8 @@ def main():
         generate_speech_commands_partitions(alpha=alpha, n_clients=clients, root=root)
     elif dataset == "FEMNIST":
         create_femnist_partitions(n_clients=clients, data_dir=root)
-
+    elif dataset == "OfficeHome":
+        generate_office_home_strict(raw_dir=root)
 
 if __name__ == "__main__":
     main()
