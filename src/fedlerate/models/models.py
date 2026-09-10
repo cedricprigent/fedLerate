@@ -114,7 +114,7 @@ class DummyModel(nn.Module):
 
 
 class PFL_ResNet18(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes=7):
         super().__init__()
         model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
 
@@ -131,7 +131,7 @@ class PFL_ResNet18(nn.Module):
             model.layer4,
             model.avgpool,
             nn.Flatten(),
-            torch.nn.Linear(model.fc.in_features, 7)
+            torch.nn.Linear(model.fc.in_features, num_classes)
         )
 
     def forward(self, x):
@@ -331,9 +331,9 @@ def load_model(model_name, n_classes, device):
         model = PFL_LeNet5(in_channels=3, num_classes=n_classes).to(device)
     elif model_name == 'ResNet18':
         model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).to(device)
-        model.fc = torch.nn.Linear(model.fc.in_features, 7).to(device)
+        model.fc = torch.nn.Linear(model.fc.in_features, n_classes).to(device)
     elif model_name == 'PFL_ResNet18':
-        model = PFL_ResNet18().to(device)
+        model = PFL_ResNet18(num_classes=n_classes).to(device)
     elif model_name == 'AutoEncoder':
         encoder = Encoder().to(device)
         decoder = Decoder().to(device)
